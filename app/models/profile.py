@@ -11,7 +11,7 @@ from app.database.base import Base
 class Profile(Base):
     __tablename__ = "profiles"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    id = Column(String(50), primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
     full_name = Column(String(255), nullable=False)
     phone = Column(String(50), nullable=True)

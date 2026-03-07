@@ -12,7 +12,7 @@ class Project(Base):
     __tablename__ = "projects"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    profile_id = Column(UUID(as_uuid=True), ForeignKey("profiles.id"), nullable=False, index=True)
+    profile_id = Column(String(50), ForeignKey("profiles.id"), nullable=False, index=True)
 
     # ── Raw GitHub data ────────────────────────────────────────────────────────
     github_repo_name = Column(String(255), nullable=False)
