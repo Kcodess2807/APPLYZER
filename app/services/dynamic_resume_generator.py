@@ -1,12 +1,15 @@
 """Dynamic resume generator with role-specific projects and LaTeX PDF generation."""
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from jinja2 import Template
 from loguru import logger
 import uuid
 from datetime import datetime
+
+from pylatex import Document, NoEscape, Package
+from pylatex.utils import escape_latex
 
 from app.services.ai_service import AIService
 
@@ -143,7 +146,7 @@ class DynamicResumeGenerator:
         """Initialize resume generator."""
         self.ai_service = AIService()
         self.template_path = Path("app/templates/resume_template.tex")
-        self.output_dir = Path("uploads/resumes")
+        self.output_dir = Path("generated/resumes")
         self.output_dir.mkdir(parents=True, exist_ok=True)
     
     def generate_resume(
@@ -355,6 +358,7 @@ Return ONLY the JSON array, no other text."""
                         "items": str(items)
                     })
         
+        primary_skills_raw = user_data.get("primary_skills") or ["Python", "JavaScript", "React"]
         return {
             "name": user_data.get("full_name", "Your Name"),
             "phone": user_data.get("phone", "+1234567890"),
@@ -364,15 +368,15 @@ Return ONLY the JSON array, no other text."""
             "linkedin_display": self._extract_display_url(user_data.get("linkedin_url", "")),
             "website_url": user_data.get("website_url") or user_data.get("github_url", "https://github.com"),
             "website_display": self._extract_display_url(user_data.get("website_url") or user_data.get("github_url", "")),
-            "experience_years": user_data.get("experience_years", "3+"),
-            "primary_skills": ", ".join(user_data.get("primary_skills", ["Python", "JavaScript", "React"])[:3]),
+            "experience_years": user_data.get("experience_years") or "3+",
+            "primary_skills": ", ".join(primary_skills_raw[:3]),
             "target_role": target_role,
             "education": user_data.get("education", []),
             "skills": formatted_skills,
             "experience": user_data.get("experience", []),
             "projects": projects,
             "extra_curricular": user_data.get("extra_curricular", []),
-            "leadership": user_data.get("leadership", [])
+            "leadership": user_data.get("leadership", []),
         }
     
     def _extract_display_url(self, url: str) -> str:
@@ -386,82 +390,158 @@ Return ONLY the JSON array, no other text."""
         return display
     
     def _generate_latex_file(self, resume_data: Dict[str, Any], filename: str) -> Path:
-        """Generate LaTeX file from template."""
-        try:
-            # Load and render template with custom Jinja2 environment
-            from jinja2 import Environment, FileSystemLoader
-            
-            # Create Jinja2 environment with LaTeX-friendly delimiters
-            env = Environment(
-                loader=FileSystemLoader('app/templates'),
-                block_start_string='\\BLOCK{',
-                block_end_string='}',
-                variable_start_string='\\VAR{',
-                variable_end_string='}',
-                comment_start_string='\\#{',
-                comment_end_string='}',
-                line_statement_prefix='%%',
-                line_comment_prefix='%#',
-                trim_blocks=True,
-                autoescape=False
+        """Generate LaTeX file using pylatex with automatic special-character escaping."""
+        esc = escape_latex
+        e = resume_data
+
+        doc = Document(
+            documentclass="resume",
+            document_options="",
+            fontenc=None,
+            inputenc=None,
+            lmodern=False,
+            textcomp=False,
+            page_numbers=False,
+        )
+
+        doc.packages.append(Package("geometry", options=["left=0.4in", "top=0.4in", "right=0.4in", "bottom=0.4in"]))
+        doc.packages.append(Package("hyperref"))
+
+        doc.preamble.append(NoEscape(r"\newcommand{\tab}[1]{\hspace{.2667\textwidth}\rlap{#1}}"))
+        doc.preamble.append(NoEscape(r"\newcommand{\itab}[1]{\hspace{0em}\rlap{#1}}"))
+        doc.preamble.append(NoEscape(f"\\name{{{esc(e['name'])}}}"))
+        doc.preamble.append(NoEscape(f"\\address{{{esc(e['phone'])} \\\\ {esc(e['location'])}}}"))
+        doc.preamble.append(NoEscape(
+            f"\\address{{\\href{{mailto:{e['email']}}}{{{esc(e['email'])}}} \\\\ "
+            f"\\href{{{e['linkedin_url']}}}{{{esc(e['linkedin_display'])}}} \\\\ "
+            f"\\href{{{e['website_url']}}}{{{esc(e['website_display'])}}}}}"
+        ))
+
+        # OBJECTIVE
+        doc.append(NoEscape(
+            f"\\begin{{rSection}}{{OBJECTIVE}}\n"
+            f"{{Software Engineer with {esc(e['experience_years'])} years of experience in "
+            f"{esc(e['primary_skills'])}, seeking full-time {esc(e['target_role'])} roles.}}\n"
+            f"\\end{{rSection}}\n"
+        ))
+
+        # EDUCATION
+        edu_lines = []
+        for edu in e.get("education", []):
+            line = (
+                f"{{\\bf {esc(edu.get('degree', ''))}}}, {esc(edu.get('institution', ''))} "
+                f"\\hfill {{{esc(edu.get('year', ''))}}}\\\\"
             )
-            
-            # Load template
-            template = env.get_template('resume_template.tex')
-            latex_content = template.render(**resume_data)
-            
-            # Write to file
-            tex_path = self.output_dir / f"{filename}.tex"
-            with open(tex_path, 'w') as f:
-                f.write(latex_content)
-            
-            logger.info(f"Generated LaTeX file: {tex_path}")
-            return tex_path
-            
-        except Exception as e:
-            logger.error(f"Error generating LaTeX file: {e}")
-            raise
+            if edu.get("coursework"):
+                line += f"\nRelevant Coursework: {esc(edu['coursework'])}."
+            edu_lines.append(line)
+        doc.append(NoEscape(
+            "\\begin{rSection}{Education}\n" +
+            "\n".join(edu_lines) + "\n" +
+            "\\end{rSection}\n"
+        ))
+
+        # SKILLS
+        skill_rows = " \\\\\n".join(
+            f"{esc(s.get('category', ''))} & {esc(s.get('items', ''))}"
+            for s in e.get("skills", [])
+        )
+        skills_body = (
+            "\\begin{tabular}{ @{} >{\\bfseries}l @{\\hspace{6ex}} l }\n"
+            f"{skill_rows}\n"
+            "\\end{tabular}\\\\\n"
+        ) if skill_rows else ""
+        doc.append(NoEscape("\\begin{rSection}{SKILLS}\n" + skills_body + "\\end{rSection}\n"))
+
+        # EXPERIENCE
+        exp_blocks = []
+        for exp in e.get("experience", []):
+            achievements = "\n".join(f"    \\item {esc(a)}" for a in exp.get("achievements", []))
+            exp_blocks.append(
+                f"\\textbf{{{esc(exp.get('role', ''))}}} \\hfill {esc(exp.get('duration', ''))}\\\\\n"
+                f"{esc(exp.get('company', ''))} \\hfill \\textit{{{esc(exp.get('location', ''))}}}\n"
+                f"\\begin{{itemize}}\n    \\itemsep -3pt {{}}\n{achievements}\n\\end{{itemize}}\n"
+            )
+        doc.append(NoEscape(
+            "\\begin{rSection}{EXPERIENCE}\n" + "\n".join(exp_blocks) + "\\end{rSection}\n"
+        ))
+
+        # PROJECTS
+        project_items = []
+        for p in e.get("projects", []):
+            url_part = f" \\href{{{p.get('url', '')}}}{{(Try it here)}}" if p.get("url") else ""
+            project_items.append(
+                f"\\item \\textbf{{{esc(p.get('title', ''))}.}} {esc(p.get('description', ''))}{url_part}"
+            )
+        doc.append(NoEscape(
+            "\\begin{rSection}{PROJECTS}\n\\vspace{-1.25em}\n" +
+            "\n".join(project_items) + "\n\\end{rSection}\n"
+        ))
+
+        # EXTRA-CURRICULAR
+        if e.get("extra_curricular"):
+            items = "\n".join(f"    \\item {esc(a)}" for a in e["extra_curricular"])
+            doc.append(NoEscape(
+                "\\begin{rSection}{Extra-Curricular Activities}\n"
+                f"\\begin{{itemize}}\n{items}\n\\end{{itemize}}\n\\end{{rSection}}\n"
+            ))
+
+        # LEADERSHIP
+        if e.get("leadership"):
+            items = "\n".join(f"    \\item {esc(a)}" for a in e["leadership"])
+            doc.append(NoEscape(
+                "\\begin{rSection}{Leadership}\n"
+                f"\\begin{{itemize}}\n{items}\n\\end{{itemize}}\n\\end{{rSection}}\n"
+            ))
+
+        tex_path = self.output_dir / f"{filename}.tex"
+        doc.generate_tex(str(tex_path.with_suffix("")))  # pylatex appends .tex automatically
+        logger.info(f"Generated LaTeX file via pylatex: {tex_path}")
+        return tex_path
     
     def _compile_to_pdf(self, tex_path: Path) -> Optional[Path]:
         """Compile LaTeX file to PDF using pdflatex."""
         try:
-            # Check if pdflatex is available
             if not self._check_pdflatex():
                 logger.warning("pdflatex not available, skipping PDF compilation")
                 return None
-            
-            # Compile LaTeX to PDF
+
             output_dir = tex_path.parent
-            
-            # Run pdflatex twice for proper references
-            for i in range(2):
+
+            # Ensure resume.cls is discoverable — copy it next to the .tex file
+            cls_src = Path("app/templates/resume.cls")
+            cls_dst = output_dir / "resume.cls"
+            if cls_src.exists() and not cls_dst.exists():
+                shutil.copy2(cls_src, cls_dst)
+
+            # Also expose templates dir via TEXINPUTS as a fallback
+            env = os.environ.copy()
+            templates_abs = str(Path("app/templates").resolve())
+            env["TEXINPUTS"] = templates_abs + ":" + env.get("TEXINPUTS", "")
+
+            # Run pdflatex twice for proper cross-references
+            for _ in range(2):
                 result = subprocess.run(
-                    [
-                        "pdflatex",
-                        "-interaction=nonstopmode",
-                        "-output-directory", str(output_dir),
-                        str(tex_path)
-                    ],
+                    ["pdflatex", "-interaction=nonstopmode", "-output-directory", str(output_dir), str(tex_path)],
                     capture_output=True,
                     text=True,
-                    timeout=30
+                    timeout=30,
+                    env=env,
                 )
-                
                 if result.returncode != 0:
-                    logger.error(f"pdflatex compilation failed: {result.stderr}")
+                    logger.error(f"pdflatex failed:\n{result.stdout[-2000:]}")
                     return None
-            
-            # Clean up auxiliary files
-            pdf_path = tex_path.with_suffix('.pdf')
+
+            pdf_path = tex_path.with_suffix(".pdf")
             self._cleanup_latex_files(tex_path)
-            
+
             if pdf_path.exists():
                 logger.info(f"Generated PDF: {pdf_path}")
                 return pdf_path
-            else:
-                logger.error("PDF file not generated")
-                return None
-                
+
+            logger.error("PDF file not generated after compilation")
+            return None
+
         except subprocess.TimeoutExpired:
             logger.error("PDF compilation timed out")
             return None

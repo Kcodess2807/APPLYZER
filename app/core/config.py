@@ -76,7 +76,7 @@ class Settings:
     
     # File storage settings
     UPLOAD_DIR: str = "uploads"
-    RESUME_DIR: str = "uploads/resumes"
+    RESUME_DIR: str = "generated/resumes"
     COVER_LETTER_DIR: str = "uploads/cover_letters"
     
     # Logging settings
