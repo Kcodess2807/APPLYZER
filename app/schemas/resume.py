@@ -1,61 +1,84 @@
-"""Pydantic schemas for resume generation endpoints."""
-
-from typing import Any, Dict, List, Optional
-
-from pydantic import BaseModel, EmailStr, Field
-
-from app.schemas.profile import EducationItem, ExperienceItem, SkillCategory
+from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
 
 
 class ProjectItem(BaseModel):
-    """Project payload used for resume generation."""
-
     title: str
-    description: Optional[str] = None
-    technologies: List[str] = Field(default_factory=list)
+    description: Optional[str] = ""
+    technologies: Optional[List[str]] = []
     url: Optional[str] = None
+    achievements: Optional[List[str]] = []
+
+
+class EducationItem(BaseModel):
+    degree: str
+    institution: str
+    year: str
+    coursework: Optional[str] = None
+    gpa: Optional[str] = None
+
+
+class SkillCategory(BaseModel):
+    category: str
+    items: List[str]
+
+
+class ExperienceItem(BaseModel):
+    role: str
+    company: str
+    duration: str
+    location: Optional[str] = ""
+    achievements: Optional[List[str]] = []
 
 
 class ResumeGenerationRequest(BaseModel):
-    """Request for generating a single customized resume."""
-
     name: str
-    email: EmailStr
     phone: str
     location: str
-
+    email: str
     linkedin_url: Optional[str] = None
-    github_url: Optional[str] = None
-    professional_summary: Optional[str] = None
-    experience_years: Optional[str] = None
-
-    primary_skills: List[str] = Field(default_factory=list)
-    skills: List[SkillCategory] = Field(default_factory=list)
-    education: List[EducationItem] = Field(default_factory=list)
-    experience: List[ExperienceItem] = Field(default_factory=list)
-    projects: List[ProjectItem] = Field(default_factory=list)
-
-    selected_project_ids: List[str] = Field(default_factory=list)
+    linkedin_display: Optional[str] = None
+    website_url: Optional[str] = None
+    website_display: Optional[str] = None
+    experience_years: Optional[str] = "2+"
+    primary_skills: Optional[List[str]] = []
+    education: Optional[List[EducationItem]] = []
+    skills: Optional[List[SkillCategory]] = []
+    experience: Optional[List[ExperienceItem]] = []
+    projects: Optional[List[ProjectItem]] = []
+    selected_project_ids: Optional[List[str]] = None
     job_id: Optional[str] = None
+    extra_curricular: Optional[List[str]] = []
+    leadership: Optional[List[str]] = []
 
 
-class BulkResumeRequest(ResumeGenerationRequest):
-    """Request for generating resumes for multiple jobs."""
-
-    job_ids: List[str] = Field(default_factory=list)
-    max_projects_per_resume: int = Field(default=4, ge=1, le=10)
+class BulkResumeRequest(BaseModel):
+    job_ids: List[str]
+    name: str
+    phone: str
+    location: str
+    email: str
+    linkedin_url: Optional[str] = None
+    linkedin_display: Optional[str] = None
+    website_url: Optional[str] = None
+    website_display: Optional[str] = None
+    experience_years: Optional[str] = "2+"
+    primary_skills: Optional[List[str]] = []
+    education: Optional[List[EducationItem]] = []
+    skills: Optional[List[SkillCategory]] = []
+    experience: Optional[List[ExperienceItem]] = []
+    projects: Optional[List[ProjectItem]] = []
+    max_projects_per_resume: int = 4
 
 
 class ResumeResponse(BaseModel):
-    """Response for single resume generation."""
-
     success: bool
     resume_id: str
     job_id: Optional[str] = None
     download_url: str
     template_url: Optional[str] = None
     generation_method: str
-    file_paths: Dict[str, Optional[str]] = Field(default_factory=dict)
+    file_paths: Optional[Dict[str, Any]] = None
     created_at: str
     user_name: str
     job_title: str
@@ -63,13 +86,11 @@ class ResumeResponse(BaseModel):
 
 
 class BulkResumeResponse(BaseModel):
-    """Response for bulk resume generation."""
-
     success: bool
     message: str
     user_id: str
     total_jobs: int
-    resumes_generated: List[Dict[str, Any]] = Field(default_factory=list)
-    failed_jobs: List[Dict[str, Any]] = Field(default_factory=list)
-    processing_summary: Dict[str, Any] = Field(default_factory=dict)
-    download_urls: List[Dict[str, Any]] = Field(default_factory=list)
+    resumes_generated: List[Dict[str, Any]]
+    failed_jobs: List[Dict[str, Any]]
+    processing_summary: Dict[str, Any]
+    download_urls: List[Dict[str, Any]]

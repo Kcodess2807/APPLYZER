@@ -16,7 +16,7 @@ class ProfileService:
 
     def get_by_id(self, profile_id: str) -> Optional[Profile]:
         """Fetch a profile by ID. Returns None if not found."""
-        return self.db.query(Profile).filter(Profile.id == uuid.UUID(profile_id)).first()
+        return self.db.query(Profile).filter(Profile.id == str(profile_id)).first()
 
     def get_by_email(self, email: str) -> Optional[Profile]:
         """Fetch a profile by email. Returns None if not found."""
@@ -32,7 +32,7 @@ class ProfileService:
             raise ValueError(f"Profile with email {data.email} already exists")
 
         profile = Profile(
-            id=uuid.uuid4(),
+            id=str(uuid.uuid4()),
             email=data.email,
             full_name=data.full_name,
             phone=data.phone,

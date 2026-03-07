@@ -24,7 +24,7 @@ class ProjectService:
 
     def get_user_projects(self, profile_id: str, featured_only: bool = False) -> List[Project]:
         """Return all (or featured-only) projects for a profile."""
-        pid = uuid.UUID(profile_id) if isinstance(profile_id, str) else profile_id
+        pid = str(profile_id)
         query = self.db.query(Project).filter(Project.profile_id == pid)
         if featured_only:
             query = query.filter(Project.is_featured.is_(True))
@@ -33,7 +33,7 @@ class ProjectService:
     def get_project_by_id(self, project_id: str, profile_id: str) -> Optional[Project]:
         return self.db.query(Project).filter(
             Project.id == uuid.UUID(project_id),
-            Project.profile_id == uuid.UUID(profile_id),
+            Project.profile_id == str(profile_id),
         ).first()
 
     def toggle_featured(self, project_id: str, profile_id: str, is_featured: bool) -> Optional[Project]:
@@ -184,7 +184,7 @@ class ProjectService:
           4. Enrich with LLM (Groq)
           5. Upsert to DB (unique on profile_id + github_repo_name)
         """
-        pid = uuid.UUID(profile_id) if isinstance(profile_id, str) else profile_id
+        pid = str(profile_id)
         repos = self.fetch_repos(github_username)
 
         if not repos:
@@ -307,3 +307,18 @@ class ProjectService:
         selected_ids = {d["id"] for d in selected_data}
         ordered = [p for p in projects if str(p.id) in selected_ids]
         return ordered[:max_projects]
+
+    def select_relevant_projects_for_job(
+        self,
+        user_id: str,
+        job_title: str,
+        job_description: str,
+        max_projects: int = 3,
+    ) -> List[Project]:
+        """Alias for get_projects_for_job using user_id parameter name."""
+        return self.get_projects_for_job(
+            profile_id=user_id,
+            job_title=job_title,
+            job_description=job_description,
+            max_projects=max_projects,
+        )

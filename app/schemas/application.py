@@ -83,19 +83,26 @@ class QuickApplyRequest(BaseModel):
 
 class GeneratedApplicationInfo(BaseModel):
     """Per-job result from Phase 1 document generation."""
+    application_id: Optional[str] = None
     job_id: str
     job_title: Optional[str] = None
     company: Optional[str] = None
+    hr_email: Optional[str] = None
     success: bool
     selected_projects: Optional[List[str]] = None
     resume_path: Optional[str] = None
     cover_letter_path: Optional[str] = None
     output_dir: Optional[str] = None
+    email_subject: Optional[str] = None
+    email_body_preview: Optional[str] = None  # First 500 chars for review
+    cover_letter_preview: Optional[str] = None  # First 500 chars for review
     error: Optional[str] = None
 
 
 class BulkApplyResponse(BaseModel):
-    """Response returned immediately after Phase 1 (generation) completes."""
+    """Response returned immediately after Phase 1 (generation) completes.
+    Emails are NOT sent yet — call POST /batches/{batch_id}/approve to send.
+    """
     batch_id: str
     status: str
     total_jobs: int
@@ -103,3 +110,42 @@ class BulkApplyResponse(BaseModel):
     send_gap_minutes: int
     generated: List[GeneratedApplicationInfo]
     message: str
+    review_url: Optional[str] = None  # Convenience link for human review
+
+
+class BatchApplicationPreview(BaseModel):
+    """Full preview of one application inside a batch for human review."""
+    application_id: str
+    job_id: str
+    job_title: str
+    company: str
+    hr_email: Optional[str]
+    status: str
+    email_subject: Optional[str]
+    email_body: Optional[str]
+    cover_letter_preview: Optional[str]
+    resume_path: Optional[str]
+    cover_letter_path: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BatchReviewResponse(BaseModel):
+    """Full batch preview returned for human review."""
+    batch_id: str
+    total: int
+    pending_approval: int
+    applications: List[BatchApplicationPreview]
+
+
+class BatchApproveRequest(BaseModel):
+    """Optional per-application overrides when approving."""
+    application_ids: Optional[List[str]] = None  # None = approve all in batch
+    send_gap_minutes: int = 7
+
+
+class BatchRejectRequest(BaseModel):
+    application_ids: Optional[List[str]] = None  # None = reject all in batch
+    reason: Optional[str] = None

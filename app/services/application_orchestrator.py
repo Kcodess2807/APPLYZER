@@ -295,7 +295,7 @@ class ApplicationOrchestrator:
         # ── 5. Create Application DB record ──────────────────────────────────
         application = Application(
             id=uuid.uuid4(),
-            profile_id=uuid.UUID(user_id),
+            profile_id=str(user_id),
             job_id=job.id,
             batch_id=uuid.UUID(batch_id),
             status="docs_ready",

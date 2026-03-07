@@ -45,8 +45,13 @@ class Application(Base):
     # Google Sheets tracking
     sheets_row_id = Column(String(50), nullable=True)
 
-    # Status: pending | docs_ready | sent | replied | no_response | follow_up_sent | send_failed
+    # Status: pending | docs_ready | sent | replied | no_response | follow_up_sent | send_failed | rejected
     status = Column(String(50), nullable=False, default="pending", index=True)
+
+    # Human-in-the-loop approval tracking
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    rejected_at = Column(DateTime(timezone=True), nullable=True)
+    rejection_reason = Column(Text, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
