@@ -117,25 +117,35 @@ async def download_resume(filename: str):
         File response with the resume
     """
     try:
-        file_path = Path("uploads/resumes") / filename
+        # Sanitise filename — reject any path traversal attempts.
+        safe_name = Path(filename).name  # strips leading dirs
+        if safe_name != filename or ".." in filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+
+        base_dir = Path("uploads/resumes").resolve()
+        file_path = (base_dir / safe_name).resolve()
+
+        # Ensure the resolved path is still inside the allowed directory.
+        if not str(file_path).startswith(str(base_dir)):
+            raise HTTPException(status_code=400, detail="Invalid filename")
 
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Resume file not found")
 
-        if filename.endswith(".pdf"):
+        if safe_name.endswith(".pdf"):
             media_type = "application/pdf"
-        elif filename.endswith(".tex"):
+        elif safe_name.endswith(".tex"):
             media_type = "application/x-tex"
         else:
             media_type = "application/octet-stream"
 
-        return FileResponse(path=str(file_path), media_type=media_type, filename=filename)
+        return FileResponse(path=str(file_path), media_type=media_type, filename=safe_name)
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error downloading resume: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to download resume")
 
 
 @router.post("/generate-quick")

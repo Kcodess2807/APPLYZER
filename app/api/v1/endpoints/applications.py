@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timezone
 from loguru import logger
+import asyncio
+import functools
 import uuid
 
 from app.database.base import get_db
@@ -52,11 +54,18 @@ async def bulk_apply_to_jobs(
         batch_id = str(uuid.uuid4())
         orchestrator = ApplicationOrchestrator(db)
 
-        # ── Phase 1: generate all documents (blocking) ───────────────────────
-        generated_raw = orchestrator.generate_all_documents(
-            user_id=request.profile_id,
-            job_ids=request.job_ids,
-            batch_id=batch_id,
+        # ── Phase 1: generate all documents ──────────────────────────────────
+        # generate_all_documents is CPU/IO bound (LaTeX compilation, AI calls).
+        # Run it in a thread-pool executor so the event loop stays unblocked.
+        loop = asyncio.get_event_loop()
+        generated_raw = await loop.run_in_executor(
+            None,
+            functools.partial(
+                orchestrator.generate_all_documents,
+                user_id=request.profile_id,
+                job_ids=request.job_ids,
+                batch_id=batch_id,
+            ),
         )
 
         successful = [g for g in generated_raw if g.get("success")]
@@ -103,7 +112,7 @@ async def bulk_apply_to_jobs(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Bulk apply error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Bulk apply failed")
 
 
 @router.get("/", response_model=List[ApplicationResponse])
@@ -131,7 +140,7 @@ async def get_user_applications(
         
     except Exception as e:
         logger.error(f"Error fetching applications: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch applications")
 
 
 @router.get("/{application_id}", response_model=ApplicationResponse)
@@ -154,49 +163,43 @@ async def get_application(
         raise
     except Exception as e:
         logger.error(f"Error fetching application: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch application")
 
 
 @router.get("/{application_id}/status")
 async def check_application_status(
     application_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """Check email status and replies for an application."""
+    """
+    Return the current DB status for an application.
+
+    Reply detection is handled asynchronously by the background reply-checker
+    worker (POST /bulk-email/check-replies). This endpoint only reads from DB
+    so it stays fast and never blocks on a live Gmail API call.
+    """
     try:
         application = db.query(Application).filter(
             Application.id == uuid.UUID(application_id)
         ).first()
-        
+
         if not application:
             raise HTTPException(status_code=404, detail="Application not found")
-        
-        # Check for replies in Gmail
-        from app.services.gmail_service import GmailService
-        gmail = GmailService()
-        
-        has_reply = gmail.check_thread_replies(application.gmail_thread_id)
-        
-        # Update if reply found
-        if has_reply and not application.reply_received:
-            application.reply_received = True
-            application.status = 'replied'
-            db.commit()
-        
+
         return {
             "application_id": str(application.id),
             "status": application.status,
             "email_sent_at": application.email_sent_at,
             "reply_received": application.reply_received,
             "followup_count": application.followup_count,
-            "last_followup_at": application.last_followup_at
+            "last_followup_at": application.last_followup_at,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error checking status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to retrieve application status")
 
 
 @router.post("/quick-apply", response_model=BulkApplyResponse)
@@ -240,10 +243,15 @@ async def quick_apply_to_jobs(
         batch_id = str(uuid.uuid4())
         orchestrator = ApplicationOrchestrator(db)
 
-        generated_raw = orchestrator.generate_all_documents(
-            user_id=request.user_id,
-            job_ids=created_job_ids,
-            batch_id=batch_id,
+        loop = asyncio.get_event_loop()
+        generated_raw = await loop.run_in_executor(
+            None,
+            functools.partial(
+                orchestrator.generate_all_documents,
+                user_id=request.user_id,
+                job_ids=created_job_ids,
+                batch_id=batch_id,
+            ),
         )
 
         successful = [g for g in generated_raw if g.get("success")]
@@ -290,7 +298,7 @@ async def quick_apply_to_jobs(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Quick-apply error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Quick apply failed")
 
 
 # ── Human-in-the-Loop batch review / approve / reject ────────────────────────
@@ -351,7 +359,7 @@ async def review_batch(
         raise
     except Exception as e:
         logger.error(f"Error reviewing batch {batch_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to retrieve batch")
 
 
 @router.post("/batches/{batch_id}/approve")
@@ -427,7 +435,7 @@ async def approve_batch(
         raise
     except Exception as e:
         logger.error(f"Error approving batch {batch_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to approve batch")
 
 
 @router.post("/batches/{batch_id}/reject")
@@ -478,4 +486,4 @@ async def reject_batch(
         raise
     except Exception as e:
         logger.error(f"Error rejecting batch {batch_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to reject batch")

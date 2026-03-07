@@ -1,7 +1,8 @@
 """Main FastAPI application entry point."""
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from loguru import logger
 import asyncio
 import os
@@ -90,6 +91,15 @@ def create_application() -> FastAPI:
 
     # Include API router
     app.include_router(api_router, prefix=settings.API_V1_STR)
+
+    # Global exception handler — never leak internal error details to clients.
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        logger.error(f"Unhandled exception on {request.method} {request.url.path}: {exc}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "An internal server error occurred."},
+        )
 
     return app
 

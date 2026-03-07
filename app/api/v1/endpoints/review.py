@@ -27,6 +27,13 @@ class ReviewDecisionRequest(BaseModel):
     reason: str = None
 
 
+class BatchStartRequest(BaseModel):
+    """Request to start batch review workflows."""
+    user_id: str
+    user_profile: Dict[str, Any]
+    jobs: List[Dict[str, Any]]
+
+
 @router.post("/start")
 async def start_review(
     request: StartReviewRequest,
@@ -72,7 +79,7 @@ async def start_review(
         
     except Exception as e:
         logger.error(f"Failed to start review: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to start review workflow")
 
 
 @router.post("/{thread_id}/submit")
@@ -113,7 +120,7 @@ async def submit_review(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to submit review: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to submit review")
 
 
 @router.get("/{thread_id}/status")
@@ -136,40 +143,25 @@ async def get_review_status(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to get status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to get review status")
 
 
 @router.get("/pending")
 async def get_pending_reviews(
     user_id: str = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """
-    Get all applications pending review.
-    
-    TODO: Implement database query for pending reviews
-    """
-    try:
-        # This would query a reviews table in production
-        logger.info(f"Fetching pending reviews for user: {user_id or 'all'}")
-        
-        return {
-            "success": True,
-            "pending_reviews": [],
-            "message": "Review tracking not yet implemented in database"
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to get pending reviews: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    """Get all applications pending review."""
+    raise HTTPException(
+        status_code=501,
+        detail="Pending review tracking is not yet implemented. Use GET /applications/?status=docs_ready instead.",
+    )
 
 
 @router.post("/batch-start")
 async def start_batch_review(
-    user_id: str,
-    user_profile: Dict[str, Any],
-    jobs: List[Dict[str, Any]],
-    db: Session = Depends(get_db)
+    request: BatchStartRequest,
+    db: Session = Depends(get_db),
 ):
     """
     Start review workflows for multiple jobs at once.
@@ -177,63 +169,61 @@ async def start_batch_review(
     Returns list of thread_ids for each job.
     """
     try:
-        logger.info(f"Starting batch review for {len(jobs)} jobs")
-        
+        logger.info(f"Starting batch review for {len(request.jobs)} jobs")
+
         workflow = HumanReviewWorkflow(db)
         results = []
-        
-        # Import project matcher
+
         from app.agents.project_matcher import ProjectMatcherAgent
-        
+
         project_matcher = ProjectMatcherAgent(db)
-        
-        for job in jobs:
+
+        for job in request.jobs:
             try:
-                # Match projects for this job
                 match_result = await project_matcher.run({
-                    "user_id": user_id,
+                    "user_id": request.user_id,
                     "job": job,
-                    "max_projects": 5
+                    "max_projects": 5,
                 })
-                
+
                 matched_projects = match_result.data.get("matched_projects", [])
-                
-                # Start review workflow
+
                 application_id = str(uuid.uuid4())
                 result = await workflow.start_application_review(
-                    user_id=user_id,
-                    user_profile=user_profile,
+                    user_id=request.user_id,
+                    user_profile=request.user_profile,
                     job=job,
                     matched_projects=matched_projects,
-                    application_id=application_id
+                    application_id=application_id,
                 )
-                
+
                 results.append({
                     "job_title": job.get("title"),
                     "company": job.get("company"),
                     "thread_id": result["thread_id"],
                     "application_id": result["application_id"],
-                    "status": "pending_review"
+                    "status": "pending_review",
                 })
-                
+
             except Exception as e:
                 logger.error(f"Failed to process job {job.get('title')}: {e}")
                 results.append({
                     "job_title": job.get("title"),
                     "company": job.get("company"),
-                    "error": str(e),
-                    "status": "failed"
+                    "error": "Processing failed",
+                    "status": "failed",
                 })
-        
+
+        successful = [r for r in results if "thread_id" in r]
         return {
             "success": True,
-            "total_jobs": len(jobs),
-            "successful": len([r for r in results if "thread_id" in r]),
-            "failed": len([r for r in results if "error" in r]),
+            "total_jobs": len(request.jobs),
+            "successful": len(successful),
+            "failed": len(results) - len(successful),
             "results": results,
-            "message": f"Started review for {len([r for r in results if 'thread_id' in r])} applications"
+            "message": f"Started review for {len(successful)} applications",
         }
-        
+
     except Exception as e:
         logger.error(f"Batch review failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Batch review failed")
