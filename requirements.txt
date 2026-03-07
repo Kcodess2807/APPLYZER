@@ -10,7 +10,7 @@ email-validator==2.1.0
 
 # LangGraph for workflow management
 langgraph==0.2.16
-langchain-core==0.3.0
+# langgraph depends on langchain-core<0.3, so we do not pin langchain-core here to avoid conflicts
 
 # Database
 sqlalchemy==2.0.23

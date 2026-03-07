@@ -16,7 +16,6 @@ from loguru import logger
 
 from app.models.application import Application
 from app.models.job import Job
-from app.models.user import User
 from app.services.cold_dm_generator import ColdDMGenerator
 from app.services.ai_service import AIService
 from app.services.dynamic_resume_generator import dynamic_resume_generator
@@ -31,9 +30,9 @@ def _projects_to_dicts(projects) -> List[Dict[str, Any]]:
         {
             "title": p.title,
             "description": p.description,
-            "technologies": p.technologies or [],
-            "achievements": p.achievements or [],
-            "project_url": p.project_url,
+            "technologies": p.tech_stack or [],
+            "achievements": p.resume_bullets or [],
+            "project_url": p.github_repo_url,
         }
         for p in projects
     ]
@@ -208,12 +207,6 @@ class ApplicationOrchestrator:
         Phase 1: Generate resume, cover letter, and cold DM for every job.
         Returns a list of application data dicts (one per job) ready for Phase 2.
         """
-        user = self.db.query(User).filter(
-            User.id == uuid.UUID(user_id)
-        ).first()
-        if not user:
-            raise ValueError(f"User {user_id} not found")
-
         profile = ProfileService(self.db).get_profile_as_dict(user_id)
         if not profile:
             raise ValueError(f"Profile not found for user {user_id}")
@@ -272,7 +265,7 @@ class ApplicationOrchestrator:
         # ── 1. AI project selection ───────────────────────────────────────────
         project_service = ProjectService(self.db)
         selected_projects_orm = project_service.get_projects_for_job(
-            user_id=user_id,
+            profile_id=user_id,
             job_title=job.title,
             job_description=job.description or job.title,
             max_projects=3,
@@ -302,7 +295,7 @@ class ApplicationOrchestrator:
         # ── 5. Create Application DB record ──────────────────────────────────
         application = Application(
             id=uuid.uuid4(),
-            user_id=uuid.UUID(user_id),
+            profile_id=uuid.UUID(user_id),
             job_id=job.id,
             batch_id=uuid.UUID(batch_id),
             status="docs_ready",

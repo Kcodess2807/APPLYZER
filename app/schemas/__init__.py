@@ -2,14 +2,15 @@
 Pydantic schemas package.
 """
 
-from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserWithProjects
-from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
+from app.schemas.profile import ProfileCreate, ProfileUpdate, ProfileResponse, ProfileSummary
+from app.schemas.project import ProjectResponse, ProjectFeatureToggle, SyncProjectsResponse
 from app.schemas.job import JobCreate, JobUpdate, JobResponse, JobFilter
-from app.schemas.application import ApplicationCreate, ApplicationUpdate, ApplicationResponse, ApplicationWithDetails
+from app.schemas.application import ApplicationCreate, ApplicationUpdate, ApplicationResponse, BulkApplyRequest, BulkApplyResponse
 
 __all__ = [
-    "UserCreate", "UserUpdate", "UserResponse", "UserWithProjects",
-    "ProjectCreate", "ProjectUpdate", "ProjectResponse",
+    "ProfileCreate", "ProfileUpdate", "ProfileResponse", "ProfileSummary",
+    "ProjectResponse", "ProjectFeatureToggle", "SyncProjectsResponse",
     "JobCreate", "JobUpdate", "JobResponse", "JobFilter",
-    "ApplicationCreate", "ApplicationUpdate", "ApplicationResponse", "ApplicationWithDetails"
+    "ApplicationCreate", "ApplicationUpdate", "ApplicationResponse",
+    "BulkApplyRequest", "BulkApplyResponse",
 ]

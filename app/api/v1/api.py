@@ -11,9 +11,6 @@ from app.api.v1.endpoints import (
     workflow,
     review,
     test_generation,
-    skills,
-    education,
-    experiences,
     profile,
     gmail,
     sheets,
@@ -30,9 +27,6 @@ api_router = APIRouter()
 api_router.include_router(health.router, prefix="/health", tags=["health"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(profile.router, prefix="/profile", tags=["profile"])
-api_router.include_router(skills.router, prefix="/skills", tags=["skills"])
-api_router.include_router(education.router, prefix="/education", tags=["education"])
-api_router.include_router(experiences.router, prefix="/experiences", tags=["experiences"])
 api_router.include_router(projects.router, prefix="/projects", tags=["projects"])
 api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 api_router.include_router(gmail.router, prefix="/gmail", tags=["gmail"])

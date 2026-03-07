@@ -43,6 +43,9 @@ class Settings:
     # AI Service settings
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
     GROQ_API_KEY: Optional[str] = os.getenv("GROQ_API_KEY")
+
+    # GitHub API — optional token increases rate limit from 60 to 5000 req/hr
+    GITHUB_TOKEN: Optional[str] = os.getenv("GITHUB_TOKEN")
     
     # Gmail API settings
     GMAIL_CLIENT_ID: str = os.getenv("GMAIL_CLIENT_ID", "")

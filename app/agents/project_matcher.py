@@ -125,7 +125,7 @@ class ProjectMatcherAgent(BaseAgent):
         score = 0
 
         # Technology match (+3 each)
-        for tech in (t.lower() for t in (project.technologies or [])):
+        for tech in (t.lower() for t in (project.tech_stack or [])):
             if tech in job_description or tech in required_skills:
                 score += SCORING_WEIGHTS["technology_match"]
 

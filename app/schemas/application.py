@@ -39,25 +39,27 @@ class ApplicationUpdate(BaseModel):
 class ApplicationResponse(ApplicationBase):
     """Schema for application response data."""
     id: uuid.UUID
-    user_id: uuid.UUID
+    profile_id: uuid.UUID
+    reply_received: bool = False
+    followup_count: int = 0
     created_at: datetime
     sent_at: Optional[datetime] = None
+    email_sent_at: Optional[datetime] = None
     response_received_at: Optional[datetime] = None
     follow_up_scheduled_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
 
 class ApplicationWithDetails(ApplicationResponse):
-    """Application response with job and user details."""
+    """Application response with job details."""
     job: "JobResponse"
-    user: "UserResponse"
 
 
 class BulkApplyRequest(BaseModel):
     """Request schema for applying to multiple stored jobs at once."""
-    user_id: str
+    profile_id: str
     job_ids: List[str]
     email_tone: str = "professional"
     send_gap_minutes: int = 7  # Minutes between emails to avoid spam filters

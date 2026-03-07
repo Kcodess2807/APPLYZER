@@ -1,110 +1,55 @@
-"""User profile management - comprehensive endpoint for all user data."""
+"""Profile summary and completeness endpoints."""
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from loguru import logger
 
 from app.database.base import get_db
 from app.services.profile_service import ProfileService
-from app.schemas.profile import CompleteProfileResponse
-from app.schemas.user import UserResponse
-from app.schemas.skill import SkillResponse
-from app.schemas.education import EducationResponse
-from app.schemas.experience import ExperienceResponse
-from app.schemas.project import ProjectResponse
+from app.services.project_service import ProjectService
+from app.schemas.profile import ProfileSummary
 
 router = APIRouter()
 
 
-@router.get("/{user_id}", response_model=CompleteProfileResponse)
-async def get_complete_profile(
-    user_id: str,
-    db: Session = Depends(get_db),
-):
-    """
-    Get complete user profile including:
-    - Basic user information
-    - Skills
-    - Education
-    - Work experience
-    - Projects
-    """
-    try:
-        logger.info(f"Fetching complete profile for user {user_id}")
-
-        profile = ProfileService(db).get_complete_profile(user_id)
-        if not profile:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        return CompleteProfileResponse(
-            user=UserResponse.from_orm(profile["user"]),
-            skills=[SkillResponse.from_orm(s) for s in profile["skills"]],
-            education=[EducationResponse.from_orm(e) for e in profile["education"]],
-            experiences=[ExperienceResponse.from_orm(exp) for exp in profile["experiences"]],
-            projects=[ProjectResponse.from_orm(p) for p in profile["projects"]],
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching complete profile: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch profile: {str(e)}")
-
-
-@router.get("/{user_id}/summary")
+@router.get("/{profile_id}/summary", response_model=ProfileSummary)
 async def get_profile_summary(
-    user_id: str,
+    profile_id: str,
     db: Session = Depends(get_db),
 ):
-    """Get a summary of user profile completeness."""
+    """Get profile completeness summary."""
     try:
-        svc = ProfileService(db)
+        profile = ProfileService(db).get_by_id(profile_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="Profile not found")
 
-        user = svc.get_user(user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        projects_synced = len(ProjectService(db).get_user_projects(profile_id))
 
-        skills_count = len(svc.get_skills(user_id))
-        education_count = len(svc.get_education(user_id))
-        experience_count = len(svc.get_experiences(user_id))
-        project_count = len(svc.get_projects(user_id))
+        score = 0
+        if profile.full_name:
+            score += 20
+        if profile.email:
+            score += 20
+        if profile.skills:
+            score += 20
+        if profile.education:
+            score += 20
+        if profile.experience or projects_synced:
+            score += 20
 
-        completeness_score = 0
-        if user.full_name:
-            completeness_score += 20
-        if user.email:
-            completeness_score += 20
-        if skills_count > 0:
-            completeness_score += 20
-        if education_count > 0:
-            completeness_score += 20
-        if experience_count > 0 or project_count > 0:
-            completeness_score += 20
-
-        return {
-            "user_id": str(user_id),
-            "full_name": user.full_name,
-            "email": user.email,
-            "completeness_score": completeness_score,
-            "counts": {
-                "skills": skills_count,
-                "education": education_count,
-                "experiences": experience_count,
-                "projects": project_count,
-            },
-            "missing_sections": [
-                section
-                for section, count in [
-                    ("skills", skills_count),
-                    ("education", education_count),
-                    ("experience", experience_count),
-                    ("projects", project_count),
-                ]
-                if count == 0
-            ],
-        }
-
+        return ProfileSummary(
+            profile_id=str(profile.id),
+            full_name=profile.full_name,
+            email=profile.email,
+            github_username=profile.github_username,
+            completeness_score=score,
+            has_skills=bool(profile.skills),
+            has_education=bool(profile.education),
+            has_experience=bool(profile.experience),
+            has_projects=projects_synced > 0,
+            projects_synced=projects_synced,
+        )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error fetching profile summary: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch summary: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

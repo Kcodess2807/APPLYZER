@@ -1,56 +1,46 @@
-"""
-Pydantic schemas for Project model validation.
-"""
-
-from pydantic import BaseModel, validator
+"""Pydantic schemas for Project — GitHub-synced, LLM-enriched."""
+from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 import uuid
 
 
-class ProjectBase(BaseModel):
-    """Base project schema with common fields."""
-    title: str
-    description: str
-    project_type: Optional[str] = None
-    technologies: List[str] = []
-    achievements: List[str] = []
-    skills_demonstrated: List[str] = []
-    keywords: List[str] = []  # Searchable keywords for better matching
-    project_url: Optional[str] = None
-    
-    
-    @validator('technologies', 'achievements')
-    def validate_arrays_not_empty(cls, v):
-        if not v:
-            return []
-        return v
-
-
-class ProjectCreate(ProjectBase):
-    """Schema for creating a new project."""
-    pass
-
-
-class ProjectUpdate(BaseModel):
-    """Schema for updating project information."""
+class ProjectResponse(BaseModel):
+    """Full project response from DB."""
+    id: uuid.UUID
+    profile_id: uuid.UUID
+    github_repo_name: str
+    github_repo_url: str
+    primary_language: Optional[str] = None
+    github_topics: List[str] = []
+    github_stars: Optional[int] = 0
+    github_updated_at: Optional[datetime] = None
     title: Optional[str] = None
     description: Optional[str] = None
-    project_type: Optional[str] = None
-    technologies: Optional[List[str]] = None
-    achievements: Optional[List[str]] = None
-    skills_demonstrated: Optional[List[str]] = None
-    keywords: Optional[List[str]] = None
-    project_url: Optional[str] = None
-    
-
-
-class ProjectResponse(ProjectBase):
-    """Schema for project response data."""
-    id: uuid.UUID
-    user_id: uuid.UUID
+    tech_stack: List[str] = []
+    features: List[str] = []
+    resume_bullets: List[str] = []
+    category: Optional[str] = None
+    skills_demonstrated: List[str] = []
+    is_featured: bool = True
+    last_synced_at: Optional[datetime] = None
+    llm_processed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
+
+
+class ProjectFeatureToggle(BaseModel):
+    """Toggle whether a project appears on resumes."""
+    is_featured: bool
+
+
+class SyncProjectsResponse(BaseModel):
+    """Response from a GitHub sync operation."""
+    synced: int
+    skipped: int
+    failed: int
+    total_repos: int
+    message: str

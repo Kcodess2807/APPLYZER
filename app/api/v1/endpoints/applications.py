@@ -40,14 +40,14 @@ async def bulk_apply_to_jobs(
     - Application status updated to 'sent' and tracked in Google Sheets.
     """
     try:
-        logger.info(f"Bulk apply request: {len(request.job_ids)} jobs for user {request.user_id}")
+        logger.info(f"Bulk apply request: {len(request.job_ids)} jobs for profile {request.profile_id}")
 
         batch_id = str(uuid.uuid4())
         orchestrator = ApplicationOrchestrator(db)
 
         # ── Phase 1: generate all documents (blocking) ───────────────────────
         generated_raw = orchestrator.generate_all_documents(
-            user_id=request.user_id,
+            user_id=request.profile_id,
             job_ids=request.job_ids,
             batch_id=batch_id,
         )
@@ -109,7 +109,7 @@ async def get_user_applications(
     """Get all applications for a user."""
     try:
         query = db.query(Application).filter(
-            Application.user_id == uuid.UUID(user_id)
+            Application.profile_id == uuid.UUID(user_id)
         )
         
         if status:

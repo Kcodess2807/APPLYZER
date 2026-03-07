@@ -11,7 +11,7 @@ def init_db():
         logger.info("Initializing database...")
         
         # Import all models to ensure they are registered
-        from app.models import User, Project, Job, Application
+        from app.models import Profile, Project, Job, Application
         from app.database.base import Base
         
         # Create all tables
@@ -25,7 +25,7 @@ def init_db():
                 SELECT tablename, rowsecurity 
                 FROM pg_tables 
                 WHERE schemaname = 'public' 
-                AND tablename IN ('users', 'projects', 'jobs', 'applications')
+                AND tablename IN ('profiles', 'projects', 'jobs', 'applications')
             """))
             
             rls_status = result.fetchall()
