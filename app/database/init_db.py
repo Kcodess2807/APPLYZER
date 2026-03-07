@@ -49,16 +49,22 @@ def init_db():
 
 
 def check_db_connection():
-    """Check if database connection is working."""
-    try:
-        db = SessionLocal()
-        db.execute(text("SELECT 1"))
-        db.close()
-        logger.info("Database connection successful")
-        return True
-    except Exception as e:
-        logger.error(f"Database connection failed: {e}")
-        return False
+    """Check if database connection is working. Retries once after a short delay."""
+    import time
+    for attempt in range(3):
+        try:
+            db = SessionLocal()
+            db.execute(text("SELECT 1"))
+            db.close()
+            logger.info("Database connection successful")
+            return True
+        except Exception as e:
+            if attempt < 2:
+                logger.warning(f"DB connection attempt {attempt + 1} failed, retrying in 2s...")
+                time.sleep(2)
+            else:
+                logger.error(f"Database connection failed: {e}")
+                return False
 
 
 if __name__ == "__main__":

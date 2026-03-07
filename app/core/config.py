@@ -34,7 +34,7 @@ class Settings:
             raise ValueError("DATABASE_URL is required. Please set up your database credentials in .env file.")
         url = self.DATABASE_URL
         # Supabase requires SSL; add sslmode=require if not already present.
-        if "supabase.com" in url and "sslmode" not in url:
+        if ("supabase.com" in url or "supabase.co" in url) and "sslmode" not in url:
             url += ("&" if "?" in url else "?") + "sslmode=require"
         return url
     
