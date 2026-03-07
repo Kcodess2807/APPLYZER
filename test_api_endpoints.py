@@ -168,6 +168,35 @@ def test_get_profile_summary(user_id):
         print(f"  Error: {response.text}")
         return False
 
+def test_send_followups():
+    """Test sending follow-up emails."""
+    print("\n" + "=" * 60)
+    print("Testing Bulk Email Follow-ups Endpoint")
+    print("=" * 60)
+    
+    response = requests.post(f"{BASE_URL}/bulk-email/send-followups")
+    print(f"\n✓ Send follow-ups: {response.status_code}")
+    
+    if response.status_code == 200:
+        result = response.json()
+        print(f"  Success: {result.get('success')}")
+        print(f"  Message: {result.get('message')}")
+        
+        details = result.get('details', {})
+        print(f"  Sent: {details.get('sent', 0)}")
+        print(f"  Errors: {details.get('errors', 0)}")
+        print(f"  Timestamp: {details.get('timestamp', 'N/A')}")
+        
+        config = result.get('config', {})
+        print(f"  Config:")
+        print(f"    - Follow-up interval: {config.get('followup_interval_days', 'N/A')} days")
+        print(f"    - Max follow-ups: {config.get('max_followup_count', 'N/A')}")
+        
+        return True
+    else:
+        print(f"  Error: {response.text}")
+        return False
+
 def main():
     """Run all tests."""
     print("=" * 60)
@@ -195,12 +224,16 @@ def main():
     test_get_profile(user_id)
     test_get_profile_summary(user_id)
     
+    # Test bulk email follow-ups
+    test_send_followups()
+    
     print("\n" + "=" * 60)
     print("✅ All tests completed!")
     print("=" * 60)
     print(f"\nTest User ID: {user_id}")
     print(f"View in Swagger: http://localhost:8000/docs")
     print(f"Get profile: {BASE_URL}/profile/{user_id}")
+
 
 if __name__ == "__main__":
     main()

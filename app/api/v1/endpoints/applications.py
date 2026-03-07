@@ -8,11 +8,13 @@ import uuid
 from app.database.base import get_db
 from app.services.application_orchestrator import ApplicationOrchestrator, send_applications_with_gaps
 from app.models.application import Application
+from app.models.job import Job
 from app.schemas.application import (
     ApplicationResponse,
     BulkApplyRequest,
     BulkApplyResponse,
     GeneratedApplicationInfo,
+    QuickApplyRequest,
 )
 
 router = APIRouter()
@@ -188,4 +190,97 @@ async def check_application_status(
         raise
     except Exception as e:
         logger.error(f"Error checking status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/quick-apply", response_model=BulkApplyResponse)
+async def quick_apply_to_jobs(
+    request: QuickApplyRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """
+    Apply to jobs by providing JDs inline — no pre-seeded job IDs needed.
+
+    Perfect for testing or applying to 10 jobs at once:
+    - Provide title, company, description, hr_email for each job
+    - System creates Job records, selects relevant projects per JD,
+      generates resume + cover letter + cold DM, then emails them out
+      with a gap between each send.
+    """
+    try:
+        logger.info(f"Quick-apply: {len(request.jobs)} jobs for user {request.user_id}")
+
+        # ── Create Job records for each target ──────────────────────────────
+        created_job_ids: List[str] = []
+        for target in request.jobs:
+            job = Job(
+                id=uuid.uuid4(),
+                title=target.title,
+                company=target.company,
+                description=target.description,
+                location=target.location or "Remote",
+                requirements=[],
+                application_email=target.hr_email,
+                source="quick_apply",
+            )
+            db.add(job)
+            created_job_ids.append(str(job.id))
+
+        db.commit()
+        logger.info(f"Created {len(created_job_ids)} job records")
+
+        # ── Phase 1: generate documents ──────────────────────────────────────
+        batch_id = str(uuid.uuid4())
+        orchestrator = ApplicationOrchestrator(db)
+
+        generated_raw = orchestrator.generate_all_documents(
+            user_id=request.user_id,
+            job_ids=created_job_ids,
+            batch_id=batch_id,
+        )
+
+        successful = [g for g in generated_raw if g.get("success")]
+        generated_info = [
+            GeneratedApplicationInfo(
+                job_id=g["job_id"],
+                job_title=g.get("job_title"),
+                company=g.get("company"),
+                success=g.get("success", False),
+                selected_projects=g.get("selected_projects"),
+                resume_path=g.get("resume_path"),
+                cover_letter_path=g.get("cover_letter_path"),
+                output_dir=g.get("output_dir"),
+                error=g.get("error"),
+            )
+            for g in generated_raw
+        ]
+
+        # ── Phase 2: send emails in background ──────────────────────────────
+        if successful:
+            background_tasks.add_task(
+                send_applications_with_gaps,
+                successful,
+                request.send_gap_minutes,
+            )
+
+        return BulkApplyResponse(
+            batch_id=batch_id,
+            status="sending_in_progress" if successful else "generation_failed",
+            total_jobs=len(request.jobs),
+            docs_generated=len(successful),
+            send_gap_minutes=request.send_gap_minutes,
+            generated=generated_info,
+            message=(
+                f"Documents generated for {len(successful)}/{len(request.jobs)} jobs. "
+                f"Emails will be sent every {request.send_gap_minutes} minutes in the background."
+                if successful
+                else "Document generation failed for all jobs. No emails will be sent."
+            ),
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Quick-apply error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

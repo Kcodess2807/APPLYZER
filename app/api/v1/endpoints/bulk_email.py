@@ -4,6 +4,7 @@ from typing import List
 import tempfile
 import shutil
 from pathlib import Path
+from datetime import datetime
 from loguru import logger
 
 from app.schemas.bulk_email import BulkEmailRequest, BulkEmailResponse
@@ -77,15 +78,58 @@ async def send_followups_manual():
     - Have status "SENT" (no reply received)
     - Were sent more than FOLLOWUP_DAYS_INTERVAL days ago
     - Have followup_count < MAX_FOLLOWUP_COUNT
+
+    Returns:
+        - success: Operation status
+        - message: Human-readable message
+        - details: Statistics about sent/failed follow-ups
+        - config: Current follow-up configuration
     """
     try:
-        logger.info("Manual follow-up send triggered")
+        logger.info("Manual follow-up send triggered via API")
+        
+        # Validate spreadsheet configuration
+        if not settings.SHEETS_SPREADSHEET_ID:
+            raise HTTPException(
+                status_code=500,
+                detail="SHEETS_SPREADSHEET_ID not configured. Please set it in .env file."
+            )
+        
+        # Initialize scheduler
         scheduler = FollowUpScheduler(settings.SHEETS_SPREADSHEET_ID)
+        
+        # Execute follow-up sending
         result = await scheduler.send_followups()
-        return {"success": True, "message": "Follow-up emails sent", "details": result}
+        
+        # Build response with detailed information
+        sent = result.get('sent', 0)
+        errors = result.get('errors', 0)
+        
+        response = {
+            "success": True,
+            "message": f"Follow-up cycle completed: {sent} sent, {errors} failed",
+            "details": {
+                "sent": sent,
+                "errors": errors,
+                "timestamp": result.get('timestamp', datetime.now().isoformat())
+            },
+            "config": {
+                "followup_interval_days": settings.FOLLOWUP_DAYS_INTERVAL,
+                "max_followup_count": settings.MAX_FOLLOWUP_COUNT
+            }
+        }
+        
+        logger.info(f"Follow-up send completed: {sent} sent, {errors} errors")
+        return response
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error sending follow-ups: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error sending follow-ups: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send follow-ups: {str(e)}"
+        )
 
 
 @router.get("/tracking-status")
@@ -108,6 +152,19 @@ async def get_tracking_status():
                 "pending_followup": len(followup_emails),
                 "reply_rate": f"{(len(replied_emails) / max(total, 1)) * 100:.1f}%",
             },
+            "config": {
+                "followup_interval_days": settings.FOLLOWUP_DAYS_INTERVAL,
+                "max_followup_count": settings.MAX_FOLLOWUP_COUNT
+            },
+            "eligible_for_followup": [
+                {
+                    "email": email.get("email"),
+                    "subject": email.get("subject"),
+                    "sent_at": email.get("sent_at"),
+                    "followup_count": email.get("followup_count")
+                }
+                for email in followup_emails[:5]  # Show first 5
+            ]
         }
     except Exception as e:
         logger.error(f"Error getting tracking status: {e}")

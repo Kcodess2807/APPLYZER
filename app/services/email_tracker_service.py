@@ -100,7 +100,14 @@ class EmailTrackerService:
             return []
     
     def get_emails_for_followup(self) -> List[Dict[str, Any]]:
-        """Get emails that need follow-up."""
+        """
+        Get emails that need follow-up.
+        
+        Returns emails where:
+        - Status is "SENT" (no reply received)
+        - Sent more than FOLLOWUP_DAYS_INTERVAL days ago
+        - followup_count < MAX_FOLLOWUP_COUNT
+        """
         try:
             result = self.sheets_service.service.spreadsheets().values().get(
                 spreadsheetId=self.spreadsheet_id,
@@ -108,41 +115,74 @@ class EmailTrackerService:
             ).execute()
             
             rows = result.get('values', [])
+            
+            if not rows:
+                logger.info("No email tracking data found")
+                return []
+            
             followup_threshold = datetime.now() - timedelta(days=settings.FOLLOWUP_DAYS_INTERVAL)
             
             emails = []
             for i, row in enumerate(rows, start=2):
-                if len(row) >= 6:
+                # Skip rows with insufficient data
+                if len(row) < 6:
+                    logger.debug(f"Skipping row {i}: insufficient data")
+                    continue
+                
+                try:
                     status = row[3] if len(row) > 3 else ''
                     sent_at_str = row[4] if len(row) > 4 else ''
-                    followup_count = int(row[5]) if len(row) > 5 and row[5] else 0
+                    followup_count_str = row[5] if len(row) > 5 else '0'
+                    
+                    # Parse followup count safely
+                    try:
+                        followup_count = int(followup_count_str) if followup_count_str else 0
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid followup_count in row {i}: {followup_count_str}")
+                        followup_count = 0
                     
                     # Check if email needs follow-up
                     if status == "SENT" and followup_count < settings.MAX_FOLLOWUP_COUNT:
+                        # Parse and validate sent_at date
+                        if not sent_at_str:
+                            logger.warning(f"Row {i} has no sent_at date, skipping")
+                            continue
+                        
                         try:
                             sent_at = datetime.strptime(sent_at_str, '%Y-%m-%d %H:%M:%S')
-                            if sent_at < followup_threshold:
-                                email_data = {
-                                    'row': i,
-                                    'email': row[0] if len(row) > 0 else '',
-                                    'subject': row[1] if len(row) > 1 else '',
-                                    'thread_id': row[2] if len(row) > 2 else '',
-                                    'status': status,
-                                    'sent_at': sent_at_str,
-                                    'followup_count': followup_count,
-                                    'message_id': row[6] if len(row) > 6 else ''
-                                }
-                                emails.append(email_data)
                         except ValueError:
                             logger.warning(f"Invalid date format in row {i}: {sent_at_str}")
                             continue
+                        
+                        # Check if enough time has passed
+                        if sent_at < followup_threshold:
+                            email_data = {
+                                'row': i,
+                                'email': row[0] if len(row) > 0 else '',
+                                'subject': row[1] if len(row) > 1 else '',
+                                'thread_id': row[2] if len(row) > 2 else '',
+                                'status': status,
+                                'sent_at': sent_at_str,
+                                'followup_count': followup_count,
+                                'message_id': row[6] if len(row) > 6 else ''
+                            }
+                            
+                            # Validate required fields
+                            if email_data['email'] and email_data['thread_id']:
+                                emails.append(email_data)
+                            else:
+                                logger.warning(f"Row {i} missing email or thread_id, skipping")
+                
+                except Exception as row_error:
+                    logger.error(f"Error processing row {i}: {row_error}")
+                    continue
             
-            logger.info(f"Found {len(emails)} emails needing follow-up")
+            logger.info(f"Found {len(emails)} emails needing follow-up (threshold: {followup_threshold.strftime('%Y-%m-%d %H:%M:%S')})")
             return emails
             
         except Exception as error:
-            logger.error(f"Error getting emails for follow-up: {error}")
-            return []
+            logger.error(f"Error getting emails for follow-up: {error}", exc_info=True)
+            raise
     
     def update_email_status(self, row: int, status: str):
         """Update email status."""
@@ -175,8 +215,16 @@ class EmailTrackerService:
             raise
     
     def increment_followup_count(self, row: int):
-        """Increment follow-up count and update sent_at."""
+        """
+        Increment follow-up count and update sent_at timestamp.
+        
+        Args:
+            row: Row number in the EmailTracking sheet
+        """
         try:
+            if row < 2:
+                raise ValueError(f"Invalid row number: {row}. Must be >= 2")
+            
             # Get current followup_count
             range_name = f'EmailTracking!F{row}'
             result = self.sheets_service.service.spreadsheets().values().get(
@@ -187,9 +235,17 @@ class EmailTrackerService:
             current_count = 0
             values = result.get('values', [])
             if values and values[0]:
-                current_count = int(values[0][0]) if values[0][0] else 0
+                try:
+                    current_count = int(values[0][0]) if values[0][0] else 0
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid followup_count in row {row}, resetting to 0")
+                    current_count = 0
             
             new_count = current_count + 1
+            
+            # Validate against max count
+            if new_count > settings.MAX_FOLLOWUP_COUNT:
+                logger.warning(f"Row {row} exceeds MAX_FOLLOWUP_COUNT ({settings.MAX_FOLLOWUP_COUNT})")
             
             # Update followup_count
             body = {'values': [[new_count]]}
@@ -202,7 +258,8 @@ class EmailTrackerService:
             
             # Update sent_at to current time
             sent_at_range = f'EmailTracking!E{row}'
-            sent_at_body = {'values': [[datetime.now().strftime('%Y-%m-%d %H:%M:%S')]]}
+            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            sent_at_body = {'values': [[current_time]]}
             
             self.sheets_service.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
@@ -211,10 +268,21 @@ class EmailTrackerService:
                 body=sent_at_body
             ).execute()
             
+            # Update last_checked timestamp
+            last_checked_range = f'EmailTracking!H{row}'
+            last_checked_body = {'values': [[current_time]]}
+            
+            self.sheets_service.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=last_checked_range,
+                valueInputOption='USER_ENTERED',
+                body=last_checked_body
+            ).execute()
+            
             logger.info(f"Incremented follow-up count to {new_count} for row {row}")
             
         except Exception as error:
-            logger.error(f"Error incrementing follow-up count: {error}")
+            logger.error(f"Error incrementing follow-up count for row {row}: {error}", exc_info=True)
             raise
     
     def create_tracking_sheet(self):

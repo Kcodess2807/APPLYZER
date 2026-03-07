@@ -65,6 +65,22 @@ class BulkApplyRequest(BaseModel):
     send_gap_minutes: int = 7  # Minutes between emails to avoid spam filters
 
 
+class QuickJobTarget(BaseModel):
+    """A single job target provided inline (no pre-seeded DB record needed)."""
+    title: str
+    company: str
+    description: str
+    hr_email: str
+    location: Optional[str] = "Remote"
+
+
+class QuickApplyRequest(BaseModel):
+    """Apply to multiple jobs by providing JDs directly — no pre-seeded job IDs needed."""
+    user_id: str
+    jobs: List[QuickJobTarget]
+    send_gap_minutes: int = 7
+
+
 class GeneratedApplicationInfo(BaseModel):
     """Per-job result from Phase 1 document generation."""
     job_id: str
