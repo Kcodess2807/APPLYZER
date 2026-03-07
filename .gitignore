@@ -1,4 +1,6 @@
+# ============================================================
 # Python
+# ============================================================
 __pycache__/
 *.py[cod]
 *.pyo
@@ -10,47 +12,108 @@ dist/
 build/
 *.so
 
+# ============================================================
 # Virtual environments
+# ============================================================
 venv/
 env/
 .venv/
 .env/
 
+# ============================================================
 # Environment files
+# ============================================================
 .env
 .env.local
 .env.test
 .env.production
 
+# ============================================================
 # Credentials & secrets
+# ============================================================
 credentials/
 *.json
 !pyproject.toml
 
+# ============================================================
 # IDE
+# ============================================================
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Logs
-*.log
-
+# ============================================================
 # OS
+# ============================================================
 .DS_Store
 Thumbs.db
 
-# pytest / coverage
+# ============================================================
+# Logs
+# ============================================================
+*.log
+logs/
+
+# ============================================================
+# pytest / coverage / type checking
+# ============================================================
 .pytest_cache/
 .coverage
 htmlcov/
 .mypy_cache/
 
-# LaTeX artifacts
+# ============================================================
+# Generated documents & uploads (PDFs, DOCX, ZIPs, etc.)
+# ============================================================
+uploads/
+*.pdf
+*.docx
+*.doc
+*.zip
+*.tar.gz
+
+# Generated resume and cover letter output directories
+app/generated/
+generated/
+
+# ============================================================
+# LaTeX build artifacts
+# ============================================================
 *.aux
 *.fls
 *.fdb_latexmk
 *.synctex.gz
+*.log
+*.out
+*.toc
+*.tex
+!app/templates/*.cls
 
-# MLflow
+# ============================================================
+# MLflow experiment tracking
+# ============================================================
 mlruns/
+
+# ============================================================
+# Root-level test & demo scripts (not part of the test suite)
+# ============================================================
+test_ai_features.py
+test_api_endpoints.py
+test_bulk_email_system.py
+test_dynamic_resume.py
+test_groq_direct.py
+test_job_application.py
+example_bulk_email_usage.py
+
+# ============================================================
+# One-off utility / setup scripts
+# ============================================================
+authenticate_apis.sh
+authenticate_sheets.py
+check_auth_status.py
+cleanup_for_github.sh
+initialize_email_tracking.py
+list_sheets.py
+setup_bulk_email.py
+view_tracking_data.py
