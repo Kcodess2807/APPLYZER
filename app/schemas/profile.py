@@ -63,7 +63,7 @@ class ProfileUpdate(BaseModel):
 
 
 class ProfileResponse(ProfileBase):
-    id: uuid.UUID
+    id: str
     created_at: datetime
     updated_at: datetime
 

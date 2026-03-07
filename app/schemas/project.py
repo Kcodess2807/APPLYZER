@@ -8,7 +8,7 @@ import uuid
 class ProjectResponse(BaseModel):
     """Full project response from DB."""
     id: uuid.UUID
-    profile_id: uuid.UUID
+    profile_id: str
     github_repo_name: str
     github_repo_url: str
     primary_language: Optional[str] = None

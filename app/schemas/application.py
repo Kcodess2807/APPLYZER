@@ -39,7 +39,7 @@ class ApplicationUpdate(BaseModel):
 class ApplicationResponse(ApplicationBase):
     """Schema for application response data."""
     id: uuid.UUID
-    profile_id: uuid.UUID
+    profile_id: str
     reply_received: bool = False
     followup_count: int = 0
     created_at: datetime
