@@ -1,10 +1,10 @@
 """API endpoints for workflow orchestration."""
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
-from app.database.session import get_db
+from app.database.base import get_db  # consolidated — was app.database.session
 from app.orchestrator import JobApplicationOrchestrator
 from loguru import logger
 
@@ -42,6 +42,30 @@ class SingleJobRequest(BaseModel):
     options: Optional[WorkflowOptions] = None
 
 
+class MatchProjectsRequest(BaseModel):
+    """Request body for project matching."""
+    user_id: str
+    job: Dict[str, Any]
+    max_projects: int = 5
+
+
+class GenerateResumeRequest(BaseModel):
+    """Request body for standalone resume generation."""
+    user_profile: Dict[str, Any]
+    job: Dict[str, Any]
+    matched_projects: List[Any]
+    template: str = "standard"
+
+
+class WriteCoverLetterRequest(BaseModel):
+    """Request body for standalone cover letter generation."""
+    user_profile: Dict[str, Any]
+    job: Dict[str, Any]
+    resume_data: Dict[str, Any]
+    matched_projects: List[Any]
+    tone: str = "professional"
+
+
 @router.post("/run-full-workflow")
 async def run_full_workflow(
     request: FullWorkflowRequest,
@@ -64,7 +88,7 @@ async def run_full_workflow(
         
     except Exception as e:
         logger.error(f"Workflow execution failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Workflow execution failed")
 
 
 @router.post("/upload-jobs-csv")
@@ -92,7 +116,7 @@ async def upload_jobs_csv(
         
     except Exception as e:
         logger.error(f"CSV upload failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="CSV upload failed")
 
 
 @router.post("/fetch-jobs")
@@ -110,74 +134,65 @@ async def fetch_jobs(
         
     except Exception as e:
         logger.error(f"Job fetching failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Job fetching failed")
 
 
 @router.post("/match-projects")
 async def match_projects(
-    user_id: str,
-    job: dict,
-    max_projects: int = 5,
-    db: Session = Depends(get_db)
+    request: MatchProjectsRequest,
+    db: Session = Depends(get_db),
 ):
-    """
-    Match projects to job requirements (standalone agent execution).
-    """
+    """Match projects to job requirements (standalone agent execution)."""
     try:
         orchestrator = JobApplicationOrchestrator(db)
-        result = await orchestrator.match_projects_only(user_id, job, max_projects)
+        result = await orchestrator.match_projects_only(
+            request.user_id, request.job, request.max_projects
+        )
         return result
-        
+
     except Exception as e:
         logger.error(f"Project matching failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Project matching failed")
 
 
 @router.post("/generate-resume")
 async def generate_resume(
-    user_profile: dict,
-    job: dict,
-    matched_projects: list,
-    template: str = "standard",
-    db: Session = Depends(get_db)
+    request: GenerateResumeRequest,
+    db: Session = Depends(get_db),
 ):
-    """
-    Generate resume for specific job (standalone agent execution).
-    """
+    """Generate resume for specific job (standalone agent execution)."""
     try:
         orchestrator = JobApplicationOrchestrator(db)
         result = await orchestrator.generate_resume_only(
-            user_profile, job, matched_projects, template
+            request.user_profile, request.job, request.matched_projects, request.template
         )
         return result
-        
+
     except Exception as e:
         logger.error(f"Resume generation failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Resume generation failed")
 
 
 @router.post("/write-cover-letter")
 async def write_cover_letter(
-    user_profile: dict,
-    job: dict,
-    resume_data: dict,
-    matched_projects: list,
-    tone: str = "professional",
-    db: Session = Depends(get_db)
+    request: WriteCoverLetterRequest,
+    db: Session = Depends(get_db),
 ):
-    """
-    Write cover letter for specific job (standalone agent execution).
-    """
+    """Write cover letter for specific job (standalone agent execution)."""
     try:
         orchestrator = JobApplicationOrchestrator(db)
         result = await orchestrator.write_cover_letter_only(
-            user_profile, job, resume_data, matched_projects, tone
+            request.user_profile,
+            request.job,
+            request.resume_data,
+            request.matched_projects,
+            request.tone,
         )
         return result
-        
+
     except Exception as e:
         logger.error(f"Cover letter writing failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Cover letter generation failed")
 
 
 @router.post("/process-single-job")
@@ -204,4 +219,4 @@ async def process_single_job(
         
     except Exception as e:
         logger.error(f"Single job processing failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Single job processing failed")

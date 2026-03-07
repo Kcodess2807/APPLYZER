@@ -46,8 +46,7 @@ async def detailedHealthCheck():
         "components": {
             "database": db_status,
             "redis": "not_implemented",
-            "external_apis": "not_implemented"
+            "external_apis": "not_implemented",
         },
-        "database_url": "supabase" if "supabase.co" in settings.getDatabaseUrl else settings.getDatabaseUrl,
-        "uptime": "not_implemented"
+        "uptime": "not_implemented",
     }

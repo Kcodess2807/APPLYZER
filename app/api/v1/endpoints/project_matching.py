@@ -270,16 +270,15 @@ async def explain_project_match(
 @router.get("/cache/stats")
 async def get_cache_statistics():
     """Get cache performance statistics."""
-    
+
     try:
         stats = cache_service.get_cache_stats()
-        
+
         return {
             "success": True,
             "cache_stats": stats,
-            "mlflow_experiments": len(experiment_tracker.get_experiment_metrics(limit=100))
         }
-        
+
     except Exception as e:
         logger.error(f"Error getting cache stats: {e}")
         raise HTTPException(status_code=500, detail="Failed to get cache statistics")
@@ -306,83 +305,29 @@ async def invalidate_user_cache(user_id: str):
 @router.get("/experiments/compare")
 async def compare_algorithm_performance():
     """Compare performance of different matching algorithms."""
-    
-    try:
-        comparison = experiment_tracker.compare_algorithms()
-        
-        return {
-            "success": True,
-            "algorithm_comparison": comparison,
-            "total_experiments": sum(stats['runs'] for stats in comparison.values())
-        }
-        
-    except Exception as e:
-        logger.error(f"Error comparing algorithms: {e}")
-        raise HTTPException(status_code=500, detail="Failed to compare algorithms")
+
+    return {
+        "success": True,
+        "message": "Experiment tracking not yet implemented.",
+        "algorithm_comparison": {},
+    }
 
 
 def _log_matching_experiment(
     job_context: JobContext,
     match_results: List,
     execution_time: float,
-    user_id: str
-):
-    """Log matching experiment to MLflow."""
-    
-    try:
-        # Calculate metrics
-        avg_confidence = sum(r.confidence_score for r in match_results) / len(match_results) if match_results else 0
-        max_confidence = max(r.confidence_score for r in match_results) if match_results else 0
-        min_confidence = min(r.confidence_score for r in match_results) if match_results else 0
-        
-        # Parameters
-        parameters = {
-            "max_results": len(match_results),
-            "user_id": user_id,
-            "job_category": job_context.category or "unknown",
-            "required_skills_count": len(job_context.required_skills),
-            "job_description_length": len(job_context.description)
-        }
-        
-        # Metrics
-        metrics = {
-            "average_confidence": avg_confidence,
-            "max_confidence": max_confidence,
-            "min_confidence": min_confidence,
-            "results_count": len(match_results)
-        }
-        
-        # Job context for artifact
-        job_data = {
-            "job_id": job_context.job_id,
-            "title": job_context.title,
-            "company": job_context.company,
-            "required_skills": job_context.required_skills,
-            "category": job_context.category
-        }
-        
-        # Match results for artifact
-        results_data = [
-            {
-                "project_title": r.project.title,
-                "confidence_score": r.confidence_score,
-                "matching_keywords": r.matching_keywords
-            }
-            for r in match_results
-        ]
-        
-        experiment_tracker.log_matching_experiment(
-            algorithm_name=matcher.get_algorithm_name(),
-            algorithm_version=matcher.get_algorithm_version(),
-            parameters=parameters,
-            metrics=metrics,
-            job_context=job_data,
-            match_results=results_data,
-            execution_time=execution_time
-        )
-        
-    except Exception as e:
-        logger.warning(f"Failed to log MLflow experiment: {e}")
+    user_id: str,
+) -> None:
+    """Log matching experiment metrics (structured debug log — MLflow not wired)."""
+    if not match_results:
+        return
+    avg_confidence = sum(r.confidence_score for r in match_results) / len(match_results)
+    logger.debug(
+        f"match experiment | job={job_context.job_id} user={user_id} "
+        f"results={len(match_results)} avg_confidence={avg_confidence:.3f} "
+        f"exec_time={execution_time:.3f}s"
+    )
 
 
 def _generate_improvement_recommendations(match_result, job_context: JobContext) -> List[str]:

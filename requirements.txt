@@ -63,6 +63,9 @@ mypy==1.7.1
 isort==5.13.2
 pre-commit==3.6.0
 
+# Resume generation
+pylatex==1.4.2
+
 # Documentation
 mkdocs==1.5.3
 mkdocs-material==9.5.3

@@ -42,9 +42,9 @@ class ProfileService:
             github_username=data.github_username,
             professional_summary=data.professional_summary,
             experience_years=data.experience_years,
-            skills=[s.dict() for s in data.skills],
-            education=[e.dict() for e in data.education],
-            experience=[exp.dict() for exp in data.experience],
+            skills=[s.model_dump() for s in data.skills],
+            education=[e.model_dump() for e in data.education],
+            experience=[exp.model_dump() for exp in data.experience],
         )
 
         self.db.add(profile)
@@ -61,7 +61,7 @@ class ProfileService:
 
         for key, value in data.dict(exclude_unset=True).items():
             if key in ("skills", "education", "experience") and value is not None:
-                setattr(profile, key, [item.dict() for item in value])
+                setattr(profile, key, [item if isinstance(item, dict) else item.model_dump() for item in value])
             else:
                 setattr(profile, key, value)
 

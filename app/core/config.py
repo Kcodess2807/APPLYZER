@@ -32,7 +32,11 @@ class Settings:
         """Get database URL with validation."""
         if not self.DATABASE_URL:
             raise ValueError("DATABASE_URL is required. Please set up your database credentials in .env file.")
-        return self.DATABASE_URL
+        url = self.DATABASE_URL
+        # Supabase requires SSL; add sslmode=require if not already present.
+        if ("supabase.com" in url or "supabase.co" in url) and "sslmode" not in url:
+            url += ("&" if "?" in url else "?") + "sslmode=require"
+        return url
     
     # Redis settings
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -65,10 +69,14 @@ class Settings:
     # Security settings
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
+    # Set REQUIRE_AUTH=true in production to enforce JWT auth on all endpoints.
+    REQUIRE_AUTH: bool = os.getenv("REQUIRE_AUTH", "false").lower() == "true"
+    # Supabase JWT secret: Settings → API → JWT Secret in the Supabase dashboard.
+    SUPABASE_JWT_SECRET: str = os.getenv("SUPABASE_JWT_SECRET", "")
     
     # File storage settings
     UPLOAD_DIR: str = "uploads"
-    RESUME_DIR: str = "uploads/resumes"
+    RESUME_DIR: str = "generated/resumes"
     COVER_LETTER_DIR: str = "uploads/cover_letters"
     
     # Logging settings

@@ -29,10 +29,14 @@ async def sync_github_projects(
 async def get_projects(
     profile_id: str = Query(..., description="Profile ID"),
     featured_only: bool = Query(False, description="Return only featured projects"),
+    limit: int = Query(50, ge=1, le=200, description="Max results to return"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
     db: Session = Depends(get_db),
 ):
     """List synced projects for a profile."""
-    return ProjectService(db).get_user_projects(profile_id, featured_only=featured_only)
+    return ProjectService(db).get_user_projects(
+        profile_id, featured_only=featured_only, limit=limit, offset=offset
+    )
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
