@@ -20,7 +20,8 @@ from app.api.v1.endpoints import (
     applications,
     bulk_email,
     ai_features,
-    dynamic_resume
+    dynamic_resume,
+    resume_parser
 )
 
 api_router = APIRouter()
@@ -46,3 +47,4 @@ api_router.include_router(project_matching.router, prefix="/match", tags=["proje
 api_router.include_router(workflow.router, prefix="/workflow", tags=["workflow"])
 api_router.include_router(review.router, prefix="/review", tags=["review"])
 api_router.include_router(test_generation.router, prefix="/test", tags=["testing"])
+api_router.include_router(resume_parser.router, prefix="/profile", tags=["resume-parser"])
