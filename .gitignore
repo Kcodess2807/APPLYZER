@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.so
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Environment files
+.env
+.env.local
+.env.test
+.env.production
+
+# Credentials & secrets
+credentials/
+*.json
+!pyproject.toml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# LaTeX artifacts
+*.aux
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# MLflow
+mlruns/
