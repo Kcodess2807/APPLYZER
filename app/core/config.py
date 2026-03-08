@@ -18,7 +18,7 @@ class Settings:
     @property
     def BACKEND_CORS_ORIGINS(self) -> List[str]:
         """Parse CORS origins from environment variable."""
-        origins = os.getenv("BACKEND_CORS_ORIGINS", "http://localhost:3000,http://localhost:8000")
+        origins = os.getenv("BACKEND_CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://localhost:8000,http://127.0.0.1:5173")
         return [origin.strip() for origin in origins.split(",")]
     
     # Database settings
