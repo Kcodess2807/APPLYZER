@@ -10,7 +10,7 @@ class Settings:
     """Application settings loaded from environment variables."""
     
     # Basic app settings
-    PROJECT_NAME: str = os.getenv("PROJECT_NAME", "ApplyBot")
+    PROJECT_NAME: str = os.getenv("PROJECT_NAME", "APPLYZER")
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
     API_V1_STR: str = "/api/v1"
