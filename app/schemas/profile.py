@@ -15,7 +15,9 @@ class SkillCategory(BaseModel):
 class EducationItem(BaseModel):
     degree: str
     institution: str
-    year: str
+    year: str                         # display string e.g. "2020 – 2024" or single year
+    start_year: Optional[str] = None  # e.g. "2020"
+    end_year: Optional[str] = None    # e.g. "2024" or "Present"
     coursework: Optional[str] = None
 
 
