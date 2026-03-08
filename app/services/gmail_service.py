@@ -16,10 +16,10 @@ from app.core.gmail_auth import get_gmail_credentials
 
 class GmailService:
     """Gmail API service wrapper."""
-    
-    def __init__(self):
-        """Initialize Gmail service."""
-        self.creds = get_gmail_credentials()
+
+    def __init__(self, user_id: str = None):
+        """Initialize Gmail service for a specific user."""
+        self.creds = get_gmail_credentials(user_id)
         if not self.creds:
             raise ValueError("Gmail not authenticated")
         

@@ -417,6 +417,7 @@ async def approve_batch(
             send_applications_with_gaps,
             send_payload,
             request.send_gap_minutes,
+            request.user_id,
         )
 
         logger.info(f"Batch {batch_id}: approved {len(to_send)} applications for sending")

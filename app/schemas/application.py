@@ -144,6 +144,7 @@ class BatchApproveRequest(BaseModel):
     """Optional per-application overrides when approving."""
     application_ids: Optional[List[str]] = None  # None = approve all in batch
     send_gap_minutes: int = 7
+    user_id: Optional[str] = None  # Used to send emails from the user's own Gmail
 
 
 class BatchRejectRequest(BaseModel):

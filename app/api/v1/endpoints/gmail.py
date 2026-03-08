@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException
 from loguru import logger
 import secrets
 import time
-from typing import Dict, Tuple
+from typing import Dict, Optional
 
 from app.core.gmail_auth import (
     create_oauth_flow,
@@ -14,33 +14,35 @@ from app.core.config import settings
 
 router = APIRouter()
 
-# In-memory OAuth state store: {state_token: issued_at_timestamp}
-# Values older than STATE_TTL_SECONDS are rejected.
+# In-memory OAuth state store: {state_token: (user_id, issued_at)}
 _STATE_TTL_SECONDS = 600  # 10 minutes
-_oauth_states: Dict[str, float] = {}
+_oauth_states: Dict[str, tuple] = {}
 
 
-def _issue_state() -> str:
+def _issue_state(user_id: str = None) -> str:
     state = secrets.token_urlsafe(32)
-    _oauth_states[state] = time.monotonic()
+    _oauth_states[state] = (user_id, time.monotonic())
     return state
 
 
-def _consume_state(state: str) -> bool:
-    """Return True and remove state if valid; False otherwise."""
-    issued_at = _oauth_states.pop(state, None)
-    if issued_at is None:
-        return False
-    return (time.monotonic() - issued_at) < _STATE_TTL_SECONDS
+def _consume_state(state: str):
+    """Return (user_id, valid) and remove state."""
+    entry = _oauth_states.pop(state, None)
+    if entry is None:
+        return None, False
+    user_id, issued_at = entry
+    if (time.monotonic() - issued_at) >= _STATE_TTL_SECONDS:
+        return None, False
+    return user_id, True
 
 
 @router.get("/authenticate")
-async def start_gmail_auth():
-    """Start Gmail OAuth flow."""
+async def start_gmail_auth(user_id: Optional[str] = None):
+    """Start Gmail OAuth flow for a specific user."""
     try:
         redirect_uri = f"{settings.API_BASE_URL}/api/v1/gmail/callback"
         flow = create_oauth_flow(redirect_uri)
-        state = _issue_state()
+        state = _issue_state(user_id)
 
         authorization_url, _ = flow.authorization_url(
             access_type="offline",
@@ -63,7 +65,8 @@ async def start_gmail_auth():
 async def gmail_oauth_callback(code: str, state: str):
     """OAuth callback endpoint."""
     try:
-        if not _consume_state(state):
+        user_id, valid = _consume_state(state)
+        if not valid:
             raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
 
         redirect_uri = f"{settings.API_BASE_URL}/api/v1/gmail/callback"
@@ -72,9 +75,9 @@ async def gmail_oauth_callback(code: str, state: str):
         flow.fetch_token(code=code)
         creds = flow.credentials
 
-        save_credentials(creds)
+        save_credentials(creds, user_id)
 
-        return {"success": True, "message": "Gmail authenticated"}
+        return {"success": True, "message": "Gmail authenticated", "user_id": user_id}
 
     except HTTPException:
         raise
@@ -84,11 +87,11 @@ async def gmail_oauth_callback(code: str, state: str):
 
 
 @router.get("/status")
-async def check_gmail_status():
-    """Check Gmail authentication status."""
-    authenticated = is_authenticated()
-    
+async def check_gmail_status(user_id: Optional[str] = None):
+    """Check Gmail authentication status for a user."""
+    authenticated = is_authenticated(user_id)
     return {
         "authenticated": authenticated,
-        "message": "Gmail authenticated" if authenticated else "Not authenticated"
+        "user_id": user_id,
+        "message": "Gmail authenticated" if authenticated else "Not authenticated",
     }

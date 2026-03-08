@@ -100,6 +100,7 @@ Write the cover letter now:"""
 async def send_applications_with_gaps(
     applications: List[Dict[str, Any]],
     send_gap_minutes: int = 7,
+    user_id: str = None,
 ) -> None:
     """
     Background task: send each prepared application email with a gap in between.
@@ -128,7 +129,7 @@ async def send_applications_with_gaps(
             continue
 
         try:
-            gmail = GmailService()
+            gmail = GmailService(user_id)
             attachments = [
                 p for p in [app_data.get("resume_path"), app_data.get("cover_letter_path")]
                 if p and Path(p).exists()

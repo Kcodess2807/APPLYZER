@@ -327,10 +327,13 @@ Return ONLY the JSON array, no other text."""
         """Format projects for LaTeX template."""
         formatted = []
         for project in projects:
+            techs = project.get("technologies", [])
             formatted.append({
                 "title": project.get("title", ""),
                 "description": project.get("description", ""),
-                "url": project.get("project_url") or project.get("url", "")
+                "url": project.get("project_url") or project.get("url", ""),
+                "technologies": techs if isinstance(techs, list) else [],
+                "achievements": project.get("achievements", []) or project.get("resume_bullets", []),
             })
         return formatted
     
@@ -469,13 +472,23 @@ Return ONLY the JSON array, no other text."""
         # PROJECTS
         project_items = []
         for p in e.get("projects", []):
-            url_part = f" \\href{{{p.get('url', '')}}}{{(Try it here)}}" if p.get("url") else ""
-            project_items.append(
-                f"\\item \\textbf{{{esc(p.get('title', ''))}.}} {esc(p.get('description', ''))}{url_part}"
-            )
+            url_part = f" \\href{{{p.get('url', '')}}}{{(Link)}}" if p.get("url") else ""
+            techs = p.get("technologies", [])
+            tech_str = f" \\textit{{({esc(', '.join(techs))})}}" if techs else ""
+            achievements = p.get("achievements", [])
+            if achievements:
+                bullets = "\n".join(f"        \\item {esc(a)}" for a in achievements)
+                project_items.append(
+                    f"\\item \\textbf{{{esc(p.get('title', ''))}.}}{tech_str} {esc(p.get('description', ''))}{url_part}\n"
+                    f"    \\begin{{itemize}}\n        \\itemsep -3pt {{}}\n{bullets}\n    \\end{{itemize}}"
+                )
+            else:
+                project_items.append(
+                    f"\\item \\textbf{{{esc(p.get('title', ''))}.}}{tech_str} {esc(p.get('description', ''))}{url_part}"
+                )
         doc.append(NoEscape(
-            "\\begin{rSection}{PROJECTS}\n\\vspace{-1.25em}\n" +
-            "\n".join(project_items) + "\n\\end{rSection}\n"
+            "\\begin{rSection}{PROJECTS}\n\\vspace{-1.25em}\n\\begin{itemize}\n    \\itemsep -3pt {}\n" +
+            "\n".join(project_items) + "\n\\end{itemize}\n\\end{rSection}\n"
         ))
 
         # EXTRA-CURRICULAR
