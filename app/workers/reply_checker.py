@@ -79,9 +79,43 @@ class ReplyChecker:
         }
         
         logger.info(f"Reply check complete: {total_checked} checked, {replies_found} replies found")
-        
+
+        # After checking replies, fire any due DB-backed auto follow-ups
+        await self._process_due_followups()
+
         return result
-    
+
+    async def _process_due_followups(self):
+        """Send auto follow-ups for DB applications whose scheduled time has passed."""
+        try:
+            from app.database.base import SessionLocal
+            from app.services.followup_service import FollowUpService
+
+            db = SessionLocal()
+            try:
+                service = FollowUpService(db)
+                due = service.get_due_followups()
+                if not due:
+                    return
+                logger.info(f"Found {len(due)} application(s) with due auto follow-ups")
+                for app in due:
+                    try:
+                        result = service.send_followup(str(app.id))
+                        if result.get("success"):
+                            logger.info(f"✓ Auto follow-up sent for application {app.id}")
+                        else:
+                            logger.warning(f"✗ Auto follow-up failed for {app.id}: {result.get('error')}")
+                        await asyncio.sleep(2)  # rate limit
+                    except ValueError as e:
+                        # Business-rule violation (e.g. reply arrived between checks) — skip silently
+                        logger.debug(f"Skipping auto follow-up for {app.id}: {e}")
+                    except Exception as e:
+                        logger.error(f"Error sending auto follow-up for {app.id}: {e}")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error in _process_due_followups: {e}")
+
     async def run_continuous(self):
         """Run reply checker continuously with configured interval."""
         interval_seconds = settings.REPLY_CHECK_INTERVAL_MINUTES * 60

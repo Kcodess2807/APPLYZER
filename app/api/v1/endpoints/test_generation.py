@@ -290,8 +290,7 @@ async def render_preview(thread_id: str):
     
     TODO: Implement HTML rendering of resume and cover letter
     """
-    return {
-        "message": "HTML preview not yet implemented",
-        "thread_id": thread_id,
-        "suggestion": "Use /review/{thread_id}/status to get JSON data"
-    }
+    raise HTTPException(
+        status_code=501,
+        detail="HTML preview not yet implemented. Use /review/{thread_id}/status to get JSON data"
+    )

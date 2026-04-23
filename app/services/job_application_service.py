@@ -1,4 +1,48 @@
-"""Service for complete job application workflow with document generation."""
+"""
+Job Application Service - Complete Application Workflow Orchestration
+
+This service orchestrates the entire job application process from document generation
+to email sending and tracking. It integrates multiple services to provide a seamless
+end-to-end application pipeline.
+
+Key Features:
+    - AI-powered project selection based on job requirements
+    - Automated resume and cover letter generation
+    - Personalized cold email composition
+    - Gmail integration for sending applications
+    - Google Sheets tracking for CRM functionality
+    - Bulk application support with rate limiting
+    - Error handling and retry logic
+
+Workflow:
+    1. Analyze job description with AI
+    2. Select most relevant user projects
+    3. Generate tailored resume (LaTeX PDF)
+    4. Generate personalized cover letter
+    5. Compose cold outreach email
+    6. Send via Gmail with attachments
+    7. Log application in Google Sheets
+    8. Store application record in database
+
+Dependencies:
+    - GmailService: Email sending via Gmail API
+    - EmailTrackerService: Google Sheets tracking
+    - AIService: Groq/Claude AI for text generation
+    - ResumeGenerator: LaTeX resume compilation
+    - CoverLetterGenerator: Cover letter templating
+
+Example:
+    >>> service = JobApplicationService()
+    >>> result = await service.send_job_application(
+    ...     user_id="user-123",
+    ...     job_data={"title": "Backend Engineer", "company": "Acme"},
+    ...     user_data={"name": "John Doe", "skills": ["Python"]},
+    ...     generate_documents=True
+    ... )
+    >>> print(result["success"])  # True
+
+Author: ApplyBot Team
+"""
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from loguru import logger
@@ -15,10 +59,37 @@ from app.services.project_service import ProjectService
 
 
 class JobApplicationService:
-    """Service for sending job applications with generated documents."""
+    """
+    Orchestrates complete job application workflow.
+    
+    This service manages the entire application pipeline including document generation,
+    email composition, sending, and tracking. It coordinates multiple services to
+    provide a seamless automated application experience.
+    
+    Attributes:
+        gmail_service: Gmail API service for sending emails
+        tracker_service: Google Sheets tracking service
+        ai_service: AI service for text generation
+        cold_dm_generator: Cold email generator
+        output_dir: Directory for storing generated documents
+        
+    Methods:
+        send_job_application: Send single application with documents
+        send_bulk_applications: Send multiple applications with rate limiting
+        get_application_status: Check application status via Gmail
+    """
     
     def __init__(self, spreadsheet_id: str = None):
-        """Initialize job application service."""
+        """
+        Initialize job application service with required dependencies.
+        
+        Args:
+            spreadsheet_id: Google Sheets spreadsheet ID for tracking.
+                          If None, uses default from environment variables.
+                          
+        Raises:
+            ValueError: If Gmail or Sheets credentials are not configured
+        """
         self.gmail_service = GmailService()
         self.tracker_service = EmailTrackerService(spreadsheet_id)
         self.ai_service = AIService()

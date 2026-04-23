@@ -1,40 +1,467 @@
-# ApplyBot
+# ApplyBot 🤖
 
-Automated job application backend. Generates tailored resumes, cover letters, and cold emails - then sends them via Gmail and tracks responses in Google Sheets.
+> AI-powered job application automation platform that transforms hours of manual work into minutes of intelligent automation.
 
-See [intent.md](intent.md) for full architecture and feature details.
+**ApplyBot** automates your entire job search pipeline: discovers relevant jobs, generates tailored resumes and cover letters, sends personalized applications via Gmail, tracks responses in Google Sheets, and automatically follows up—all powered by AI.
+
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## 🎯 What It Does
+
+> [!WARNING]
+> The Frontend UI is currently heavily WIP. The backend is fully functional and can be tested via Swagger UI.
+
+- **Discovers Jobs**: Fetches from RemoteOK, CSV uploads, or manual entry
+- **Matches Projects**: AI selects your most relevant projects for each job
+- **Generates Documents**: Creates tailored LaTeX resumes and cover letters
+- **Sends Applications**: Automated Gmail sending with attachments
+- **Tracks Everything**: Google Sheets CRM for all applications
+- **Monitors Replies**: Background workers detect responses automatically
+- **Follows Up**: Smart follow-up emails after configurable intervals
+
+## 🏗️ Architecture
+
+```mermaid
+graph LR
+    A[Job Fetcher] --> B[Project Matcher]
+    B --> C[Resume Generator Cover Letter]
+    C --> D[Human Review / Output]
+```
+
+## 📚 Documentation
+
+- **[Intent & Architecture](intent.md)** - Detailed system design and features
+- **[System Design](system_design.md)** - Architecture diagrams and data flow
+- **[Investor Pitch](INVESTOR_PITCH.md)** - Business model and market analysis
+- **[API Documentation](http://localhost:8000/docs)** - Interactive Swagger UI (when running)
 
 ---
 
-## Setup
+## 🚀 Quick Start
 
-### 1. Install dependencies
+### Prerequisites
+
+- Python 3.10 or higher
+- PostgreSQL database (or Supabase account)
+- Gmail account with API access
+- Google Sheets API access
+- Groq API key (for AI features)
+
+### 1. Clone and Install
 ```bash
+git clone https://github.com/yourusername/applybot.git
+cd applybot
 pip install -r requirements.txt
 ```
 
-### 2. Configure environment
-Create a `.env` file:
+### 2. Configure Environment
+Create a `.env` file in the project root:
+
 ```env
+# Database
 DATABASE_URL=postgresql://user:pass@host/applybot
+
+# AI Services
 GROQ_API_KEY=your_groq_key
+
+# Gmail API
 GMAIL_CLIENT_ID=your_gmail_client_id
 GMAIL_CLIENT_SECRET=your_gmail_client_secret
+
+# Google Sheets API
+SHEETS_CLIENT_ID=your_sheets_client_id
+SHEETS_CLIENT_SECRET=your_sheets_client_secret
 SHEETS_SPREADSHEET_ID=your_spreadsheet_id
+
+# Application
 API_BASE_URL=http://localhost:8000
+ENABLE_BACKGROUND_WORKERS=true
+
+# Follow-up Settings
+FOLLOWUP_DAYS_INTERVAL=5
+MAX_FOLLOWUP_COUNT=2
+REPLY_CHECK_INTERVAL_MINUTES=30
 ```
 
-### 3. Run migrations
+### 3. Initialize Database
 ```bash
+# Run database migrations
 alembic upgrade head
 ```
 
-### 4. Start server
+### 4. Authenticate APIs (One-Time Setup)
+
 ```bash
-uvicorn app.main:app --reload --port 8000
+# Authenticate both Gmail and Sheets
+./scripts/authenticate_apis.sh
+
+# Or authenticate individually
+python scripts/authenticate_sheets.py
+curl http://localhost:8000/api/v1/gmail/authenticate  # Open URL in browser
+
+# Verify authentication
+python scripts/check_auth_status.py
 ```
 
-Swagger UI: http://localhost:8000/docs
+### 5. Start the Server
+
+```bash
+# Using Make
+make run
+
+# Or directly with uvicorn
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 6. Access the API
+
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+- **Health Check**: http://localhost:8000/health
+
+### 7. Running via Swagger UI
+Since the frontend is a WIP, you can test the entire pipeline using the built-in Swagger UI:
+1. Navigate to `http://localhost:8000/docs`
+2. Authenticate the APIs via `/api/v1/gmail/authenticate`
+3. Use the `/api/v1/test_generation/quick-test` endpoint for a simulated end-to-end test.
+
+---
+
+## 📖 Usage Examples
+
+### Create a User Profile
+
+```bash
+curl -X POST http://localhost:8000/api/v1/users/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@example.com",
+    "full_name": "John Doe",
+    "phone": "+1234567890",
+    "linkedin_url": "https://linkedin.com/in/johndoe",
+    "professional_summary": "Python developer with 3+ years experience"
+  }'
+```
+
+### Add Projects
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/projects/?user_id={user_id}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "E-commerce API",
+    "description": "RESTful API with payment integration",
+    "technologies": ["Python", "FastAPI", "PostgreSQL"],
+    "category": "API Development",
+    "project_url": "https://github.com/user/ecommerce-api"
+  }'
+```
+
+### Fetch Jobs
+
+```bash
+curl -X POST http://localhost:8000/api/v1/jobs/fetch \
+  -H "Content-Type: application/json" \
+  -d '{"keywords": ["python", "backend"], "limit_per_source": 50}'
+```
+
+### Generate Resume
+
+```bash
+curl -X POST http://localhost:8000/api/v1/resume/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "John Doe",
+    "email": "john@example.com",
+    "phone": "+1234567890",
+    "experience_years": "3+",
+    "primary_skills": ["Python", "FastAPI"],
+    "education": [],
+    "skills": []
+  }'
+```
+
+### Send Job Application (Full Pipeline)
+
+```bash
+curl -X POST http://localhost:8000/api/v1/bulk-email/send-job-application \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "{user_id}",
+    "job_title": "Backend Engineer",
+    "company": "Acme Corp",
+    "job_description": "We need a Python developer...",
+    "hr_email": "hr@acme.com",
+    "generate_documents": true,
+    "email_tone": "professional"
+  }'
+```
+
+### Bulk Apply to Multiple Jobs
+
+```bash
+curl -X POST http://localhost:8000/api/v1/applications/bulk-apply \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "{user_id}",
+    "job_ids": ["{job_id_1}", "{job_id_2}", "{job_id_3}"],
+    "email_tone": "professional"
+  }'
+```
+
+---
+
+## 🏗️ Project Structure
+
+```
+applybot/
+├── app/
+│   ├── api/v1/endpoints/    # API route handlers
+│   ├── agents/              # LangGraph-style AI agents
+│   ├── orchestrator/        # Workflow orchestration
+│   ├── services/            # Business logic
+│   ├── models/              # SQLAlchemy ORM models
+│   ├── schemas/             # Pydantic schemas
+│   ├── core/                # Config, auth, logging
+│   ├── workers/             # Background tasks
+│   ├── templates/           # LaTeX and email templates
+│   └── main.py              # FastAPI application
+├── alembic/                 # Database migrations
+├── scripts/                 # Utility scripts
+├── tests/                   # Test suite
+│   ├── integration/         # Integration tests
+│   └── unit/                # Unit tests (mock-based)
+├── credentials/             # OAuth credentials (gitignored)
+├── generated/               # Generated documents (gitignored)
+├── logs/                    # Application logs (gitignored)
+├── .env                     # Environment variables (gitignored)
+├── requirements.txt         # Python dependencies
+├── Makefile                 # Common commands
+└── README.md                # This file
+```
+
+---
+
+## 🔧 Development
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=app --cov-report=html
+
+# Run specific test file
+pytest tests/integration/test_api_endpoints.py -v
+```
+
+### Code Quality
+
+```bash
+# Format code
+black app/
+
+# Lint
+flake8 app/
+
+# Type checking
+mypy app/
+```
+
+### Database Migrations
+
+```bash
+# Create new migration
+alembic revision --autogenerate -m "description"
+
+# Apply migrations
+alembic upgrade head
+
+# Rollback
+alembic downgrade -1
+```
+
+---
+
+## 🎨 Key Features
+
+### 1. Intelligent Profile Management
+- Comprehensive user profiles with skills, education, experience, projects
+- Profile completeness scoring
+- Bulk data import
+
+### 2. AI-Powered Matching
+- TF-IDF + ML algorithms for project-to-job matching
+- Redis caching for performance
+- MLflow experiment tracking
+
+### 3. Document Generation
+- LaTeX-compiled professional PDFs
+- Role-specific templates
+- AI-powered content optimization
+- ATS-friendly formatting
+
+### 4. Automated Email Pipeline
+- Gmail API integration with OAuth2
+- Bulk sending with rate limiting
+- Attachment management
+- Thread tracking
+
+### 5. CRM & Tracking
+- Google Sheets integration
+- Status tracking (SENT → REPLIED → INTERVIEW → OFFER)
+- Analytics dashboard
+- Export capabilities
+
+### 6. Background Workers
+- Automated reply detection (every 30 minutes)
+- Smart follow-up scheduling
+- Configurable intervals and limits
+
+### 7. Human-in-the-Loop Review
+- Pre-send document review
+- Edit and regenerate workflow
+- Batch review support
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Backend** | FastAPI, Python 3.10+ |
+| **Database** | PostgreSQL, SQLAlchemy, Alembic |
+| **Cache** | Redis |
+| **AI** | Groq (LLaMA), Claude (Anthropic) |
+| **ML** | scikit-learn (TF-IDF), MLflow |
+| **Documents** | LaTeX (pdflatex), ReportLab |
+| **Email** | Gmail API (OAuth2) |
+| **Tracking** | Google Sheets API (OAuth2) |
+| **Testing** | pytest, pytest-cov |
+| **Logging** | Loguru |
+
+---
+
+## 📊 API Endpoints Overview
+
+### Core Resources
+- `/api/v1/users` - User management
+- `/api/v1/profile` - Complete profile with all data
+- `/api/v1/skills` - Skills management
+- `/api/v1/education` - Education entries
+- `/api/v1/experiences` - Work experience
+- `/api/v1/projects` - Project portfolio
+
+### Jobs & Applications
+- `/api/v1/jobs` - Job search and management
+- `/api/v1/applications` - Application tracking
+- `/api/v1/match` - Project-to-job matching
+
+### Document Generation
+- `/api/v1/resume` - Resume generation
+- `/api/v1/cover-letters` - Cover letter generation
+- `/api/v1/dynamic-resume` - Role-specific resumes
+
+### Email & Tracking
+- `/api/v1/bulk-email` - Bulk email sending
+- `/api/v1/gmail` - Gmail authentication
+- `/api/v1/sheets` - Sheets authentication
+
+### AI Features
+- `/api/v1/ai` - AI-powered features
+- `/api/v1/workflow` - Workflow orchestration
+- `/api/v1/review` - Human-in-the-loop review
+
+### Utilities
+- `/api/v1/health` - Health checks
+- `/api/v1/test` - Test endpoints
+
+Full API documentation: http://localhost:8000/docs
+
+---
+
+## 🔐 Security
+
+- OAuth2 for Gmail and Google Sheets
+- Environment variables for sensitive data
+- SQL injection prevention via SQLAlchemy ORM
+- CORS middleware configuration
+- Rate limiting on email sending
+- Secure credential storage
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Guidelines
+- Write tests for new features
+- Follow PEP 8 style guide
+- Add docstrings to all functions
+- Update documentation as needed
+- Ensure all tests pass before submitting
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- FastAPI for the excellent web framework
+- Groq for fast AI inference
+- Anthropic for Claude AI
+- Google for Gmail and Sheets APIs
+- The open-source community
+
+---
+
+## 📧 Contact
+
+- **Email**: contact@applybot.ai
+- **Website**: https://applybot.ai
+- **GitHub**: https://github.com/yourusername/applybot
+- **Issues**: https://github.com/yourusername/applybot/issues
+
+---
+
+## 🗺️ Roadmap
+
+### Q2 2024
+- [ ] Web UI (React/Next.js)
+- [ ] LinkedIn job scraping
+- [ ] Payment integration (Stripe)
+- [ ] Mobile app (React Native)
+
+### Q3 2024
+- [ ] Interview preparation AI
+- [ ] Salary negotiation assistant
+- [ ] Network effect features
+- [ ] Multi-language support
+
+### Q4 2024
+- [ ] Enterprise features
+- [ ] White-label solution
+- [ ] API marketplace
+- [ ] Advanced analytics
+
+---
+
+**Built with ❤️ by the ApplyBot Team**
 
 ---
 

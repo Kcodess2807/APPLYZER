@@ -8,8 +8,12 @@ import asyncio
 import functools
 import uuid
 
+from pydantic import BaseModel, Field
+
+from app.core.config import settings
 from app.database.base import get_db
 from app.services.application_orchestrator import ApplicationOrchestrator, send_applications_with_gaps
+from app.services.followup_service import FollowUpService
 from app.models.application import Application
 from app.models.job import Job
 from app.schemas.application import (
@@ -488,3 +492,144 @@ async def reject_batch(
     except Exception as e:
         logger.error(f"Error rejecting batch {batch_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to reject batch")
+
+
+# ── Follow-up endpoints ───────────────────────────────────────────────────────
+
+class ScheduleFollowUpRequest(BaseModel):
+    after_minutes: int = Field(..., ge=1, description="Minutes after sending the application email before auto follow-up fires")
+    user_id: str = Field(..., description="Profile/user ID (needed for Gmail auth)")
+
+
+class ManualFollowUpRequest(BaseModel):
+    user_id: str = Field(..., description="Profile/user ID (needed for Gmail auth)")
+    message: Optional[str] = Field(None, description="Custom follow-up message. Omit to let AI generate one.")
+
+
+@router.post("/{application_id}/follow-up")
+async def send_manual_followup(
+    application_id: str,
+    request: ManualFollowUpRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Manually send a follow-up email for an application.
+
+    - Sends immediately in the same Gmail thread as the original application email.
+    - AI generates the follow-up body unless you supply a custom `message`.
+    - Increments `followup_count` and marks status as `follow_up_sent`.
+    - Returns 409 if a reply was already received or the max follow-up limit is hit.
+    """
+    try:
+        service = FollowUpService(db, user_id=request.user_id)
+        result = service.send_followup(
+            application_id=application_id,
+            custom_message=request.message,
+        )
+        if not result.get("success"):
+            raise HTTPException(status_code=502, detail=result.get("error", "Failed to send follow-up"))
+
+        return {
+            "success": True,
+            "application_id": application_id,
+            "message_id": result.get("message_id"),
+            "thread_id": result.get("thread_id"),
+            "message": "Follow-up email sent successfully",
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending follow-up for {application_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send follow-up")
+
+
+@router.post("/{application_id}/schedule-followup")
+async def schedule_auto_followup(
+    application_id: str,
+    request: ScheduleFollowUpRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Schedule an automatic follow-up email if no reply is received within X minutes.
+
+    The background worker checks every `REPLY_CHECK_INTERVAL_MINUTES` and fires
+    the follow-up as soon as the scheduled time passes without a reply.
+
+    You can call this endpoint again with a new `after_minutes` to reschedule,
+    or DELETE /{application_id}/schedule-followup to cancel.
+    """
+    try:
+        service = FollowUpService(db, user_id=request.user_id)
+        app = service.schedule_auto_followup(application_id, request.after_minutes)
+        return {
+            "success": True,
+            "application_id": application_id,
+            "followup_scheduled_at": app.follow_up_scheduled_at.isoformat(),
+            "after_minutes": request.after_minutes,
+            "message": (
+                f"Auto follow-up scheduled at {app.follow_up_scheduled_at.strftime('%Y-%m-%d %H:%M UTC')}. "
+                f"Will send automatically if no reply is received by then."
+            ),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error scheduling follow-up for {application_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to schedule follow-up")
+
+
+@router.delete("/{application_id}/schedule-followup")
+async def cancel_auto_followup(
+    application_id: str,
+    db: Session = Depends(get_db),
+):
+    """Cancel a pending auto follow-up schedule without sending anything."""
+    try:
+        service = FollowUpService(db)
+        service.cancel_auto_followup(application_id)
+        return {"success": True, "application_id": application_id, "message": "Auto follow-up cancelled"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error cancelling follow-up for {application_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to cancel follow-up")
+
+
+@router.get("/{application_id}/follow-up-status")
+async def get_followup_status(
+    application_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Get the current follow-up state for an application.
+
+    Returns:
+    - Whether a reply has been received
+    - How many follow-ups have been sent
+    - When the next auto follow-up is scheduled (if any)
+    - Full timeline of sent_at / last_followup_at
+    """
+    try:
+        app = db.query(Application).filter(Application.id == application_id).first()
+        if not app:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        return {
+            "application_id": application_id,
+            "status": app.status,
+            "reply_received": app.reply_received,
+            "reply_received_at": app.reply_received_at.isoformat() if app.reply_received_at else None,
+            "email_sent_at": app.email_sent_at.isoformat() if app.email_sent_at else None,
+            "followup_count": app.followup_count,
+            "last_followup_at": app.last_followup_at.isoformat() if app.last_followup_at else None,
+            "auto_followup_scheduled_at": app.follow_up_scheduled_at.isoformat() if app.follow_up_scheduled_at else None,
+            "max_followups_allowed": settings.MAX_FOLLOWUP_COUNT,
+            "followups_remaining": max(0, settings.MAX_FOLLOWUP_COUNT - app.followup_count),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching follow-up status for {application_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch follow-up status")

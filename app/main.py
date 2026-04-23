@@ -1,4 +1,36 @@
-"""Main FastAPI application entry point."""
+"""
+ApplyBot - AI-Powered Job Application Automation System
+
+Main FastAPI application entry point. This module initializes the web server,
+configures middleware, sets up database connections, and manages background workers
+for automated email tracking and follow-ups.
+
+Key Features:
+    - RESTful API with FastAPI
+    - PostgreSQL database with SQLAlchemy ORM
+    - Background workers for Gmail reply checking and follow-up scheduling
+    - OAuth2 integration with Gmail and Google Sheets
+    - AI-powered resume and cover letter generation
+    - Automated job application pipeline
+
+Environment Variables:
+    DATABASE_URL: PostgreSQL connection string
+    GROQ_API_KEY: Groq AI API key for text generation
+    GMAIL_CLIENT_ID: Gmail OAuth2 client ID
+    GMAIL_CLIENT_SECRET: Gmail OAuth2 client secret
+    SHEETS_SPREADSHEET_ID: Google Sheets tracking spreadsheet ID
+    ENABLE_BACKGROUND_WORKERS: Enable/disable background workers (true/false)
+
+Usage:
+    Development:
+        uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    
+    Production:
+        gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker
+
+Author: ApplyBot Team
+Version: 1.0.0
+"""
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +50,26 @@ ENABLE_BACKGROUND_WORKERS = os.getenv("ENABLE_BACKGROUND_WORKERS", "false").lowe
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan events."""
+    """
+    Manage application lifespan events (startup and shutdown).
+    
+    Startup:
+        1. Initialize logging system
+        2. Check and initialize database connection
+        3. Start background workers (if enabled)
+            - Reply checker: Monitors Gmail for application responses
+            - Follow-up scheduler: Sends automated follow-up emails
+    
+    Shutdown:
+        1. Cancel background worker tasks
+        2. Clean up resources
+    
+    Args:
+        app: FastAPI application instance
+        
+    Yields:
+        None: Control returns to FastAPI during application runtime
+    """
     # Startup
     setup_logging()
     logger.info("🚀 Job Application System starting up...")
@@ -68,7 +119,23 @@ async def lifespan(app: FastAPI):
 
 
 def create_application() -> FastAPI:
-    """Create and configure FastAPI application."""
+    """
+    Create and configure the FastAPI application instance.
+    
+    Configuration includes:
+        - API metadata (title, description, version)
+        - CORS middleware for cross-origin requests
+        - API router with versioned endpoints (/api/v1)
+        - Global exception handler for error logging
+        - Lifespan context manager for startup/shutdown
+    
+    Returns:
+        FastAPI: Configured FastAPI application instance
+        
+    Example:
+        >>> app = create_application()
+        >>> # Run with: uvicorn app.main:app --reload
+    """
     
     app = FastAPI(
         title=settings.PROJECT_NAME,
@@ -92,10 +159,24 @@ def create_application() -> FastAPI:
     # Include API router
     app.include_router(api_router, prefix=settings.API_V1_STR)
 
-    # Global exception handler — never leak internal error details to clients.
+    import traceback
+
+    # Global exception handler — handle development vs production error responses.
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         logger.error(f"Unhandled exception on {request.method} {request.url.path}: {exc}")
+        
+        if settings.DEBUG:
+            logger.exception("Development mode: returning full traceback.")
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "detail": "An internal server error occurred.",
+                    "error": str(exc),
+                    "traceback": traceback.format_exception(type(exc), exc, exc.__traceback__)
+                },
+            )
+            
         return JSONResponse(
             status_code=500,
             content={"detail": "An internal server error occurred."},

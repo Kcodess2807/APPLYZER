@@ -213,11 +213,24 @@ class DynamicResumeGenerator:
             if output_format == "pdf":
                 pdf_path = self._compile_to_pdf(tex_path)
                 
+                pdf_base64 = None
+                if pdf_path and pdf_path.exists():
+                    import base64
+                    import io
+                    with open(pdf_path, "rb") as f:
+                        # Refactor generation step to use BytesIO stream for cloud upload readiness
+                        pdf_bytes = io.BytesIO(f.read())
+                        pdf_base64 = base64.b64encode(pdf_bytes.getvalue()).decode("utf-8")
+                    # TODO: Integration point for S3/GCS upload. 
+                    # Instead of returning base64, upload pdf_bytes to bucket and return the public URL.
+                
                 return {
                     "success": True,
                     "resume_id": resume_id,
                     "target_role": target_role,
                     "pdf_path": str(pdf_path) if pdf_path else None,
+                    "pdf_base64": pdf_base64,
+                    "download_url": f"/api/v1/dynamic-resume/download/{pdf_path.name}" if pdf_path else None,
                     "tex_path": str(tex_path),
                     "selected_projects": [p.get("title") for p in selected_projects],
                     "generation_method": "ai_selected" if use_ai_selection else "template"

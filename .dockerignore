@@ -1,0 +1,16 @@
+.env
+.env.*
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.vscode/
+.idea/
+generated/
+uploads/
+credentials/
+.pytest_cache/
+htmlcov/
+.mypy_cache/
+mlruns/
+logs/

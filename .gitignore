@@ -118,3 +118,38 @@ initialize_email_tracking.py
 list_sheets.py
 setup_bulk_email.py
 view_tracking_data.py
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Generated files
+generated/
+uploads/
+
+# Credentials
+credentials/
+*.json
+!credentials/.gitkeep
+
+# Environment
+.env
+.env.local

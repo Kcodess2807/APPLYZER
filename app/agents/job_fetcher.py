@@ -63,8 +63,10 @@ class JobFetcherAgent(BaseAgent[JobFetcherInput, list[JobData]]):
             try:
                 job = self._row_to_job(df, row)
                 jobs.append(job)
-            except Exception as exc:  # noqa: BLE001
+            except (KeyError, ValueError, TypeError) as exc:
                 self.logger.warning(f"Skipping malformed row: {exc}")
+            except Exception as exc:
+                self.logger.exception(f"Unexpected error parsing row: {exc}")
 
         self.logger.info(f"Parsed {len(jobs)} jobs from CSV")
         return jobs
@@ -78,7 +80,7 @@ class JobFetcherAgent(BaseAgent[JobFetcherInput, list[JobData]]):
         """
         url = input_data.get("url", "")
         self.logger.warning(f"Google Sheets integration not yet implemented (url={url!r})")
-        return []
+        raise NotImplementedError("Google Sheets integration not yet implemented. TODO: Implement via Sheets export URL or the Sheets API.")
 
     async def _fetch_from_linkedin(
         self, input_data: dict[str, Any]
@@ -89,7 +91,7 @@ class JobFetcherAgent(BaseAgent[JobFetcherInput, list[JobData]]):
         """
         url = input_data.get("url", "")
         self.logger.warning(f"LinkedIn scraping not yet implemented (url={url!r})")
-        return []
+        raise NotImplementedError("LinkedIn scraping not yet implemented. TODO: Implement via Playwright or a dedicated scraping library.")
 
     #private helpers
 

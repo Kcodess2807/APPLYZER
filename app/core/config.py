@@ -2,11 +2,13 @@
 import os
 from typing import List, Optional
 from dotenv import load_dotenv
+from pydantic_settings import BaseSettings
+from pydantic import field_validator
 
 load_dotenv(override=True)
 
 
-class Settings:
+class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
     # Basic app settings
@@ -68,6 +70,14 @@ class Settings:
     
     # Security settings
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
+    
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validate_secret_key(cls, v: str) -> str:
+        if v == "your-secret-key-change-this-in-production":
+            raise RuntimeError("CRITICAL: SECRET_KEY is set to default. You must change this in production.")
+        return v
+        
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
     # Set REQUIRE_AUTH=true in production to enforce JWT auth on all endpoints.
     REQUIRE_AUTH: bool = os.getenv("REQUIRE_AUTH", "false").lower() == "true"
